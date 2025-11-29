@@ -388,13 +388,4 @@ Computing shortest path from Starbucks Corniche to King Fahd Hospital...
 📍 Click here to open route in Google Maps
 ```
 
----
-
-## References
-
-- [Dijkstra's Algorithm - Wikipedia](https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm)
-- [OpenStreetMap Wiki](https://wiki.openstreetmap.org/)
-- [Overpass API Documentation](https://wiki.openstreetmap.org/wiki/Overpass_API)
-- [Binary Heap - Wikipedia](https://en.wikipedia.org/wiki/Binary_heap)
-- [Python multiprocessing Documentation](https://docs.python.org/3/library/multiprocessing.html)
 
