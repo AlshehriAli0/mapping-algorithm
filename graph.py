@@ -113,8 +113,17 @@ def _extract_place(el, node_coords):
 
     if category and nid in node_coords:
         lat, lon = node_coords[nid]
-        street = tags.get("addr:street", "")
-        return (nid, name, category, lat, lon, street)
+        # Try multiple location tags as fallbacks
+        location = (
+            tags.get("addr:street")
+            or tags.get("addr:district")
+            or tags.get("addr:suburb")
+            or tags.get("addr:neighbourhood")
+            or tags.get("addr:neighborhood")
+            or tags.get("addr:city")
+            or ""
+        )
+        return (nid, name, category, lat, lon, location)
     return None
 
 

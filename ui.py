@@ -146,7 +146,7 @@ def _browse_by_category(places):
     t2 = Table(title=f"Places in '{chosen_cat}'", box=box.ROUNDED)
     t2.add_column("No", justify="right")
     t2.add_column("Name")
-    t2.add_column("Street")
+    t2.add_column("Location")
     for i, p in enumerate(subset, start=1):
         t2.add_row(str(i), p.name, p.street or "-")
     console.print(t2)
@@ -172,7 +172,7 @@ def _search_by_name(places):
     table.add_column("No", justify="right")
     table.add_column("Name")
     table.add_column("Category")
-    table.add_column("Street")
+    table.add_column("Location")
 
     for i, p in enumerate(matches, start=1):
         table.add_row(str(i), p.name, p.category, p.street or "-")
