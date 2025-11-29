@@ -9,7 +9,6 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 from config import (
     Place,
     ROAD_SPEED,
-    INTERSECTION_DELAY,
     POPULAR_AMENITY,
     POPULAR_SHOP,
     POPULAR_LEISURE,
@@ -80,7 +79,7 @@ def _process_way(el, node_coords):
         lat1, lon1 = node_coords[u]
         lat2, lon2 = node_coords[v]
         dist_km = haversine(lat1, lon1, lat2, lon2)
-        time_min = dist_km / (speed / 60.0) + INTERSECTION_DELAY
+        time_min = dist_km / (speed / 60.0)
 
         if oneway == "yes":
             edges.append((u, v, time_min))
@@ -114,7 +113,8 @@ def _extract_place(el, node_coords):
 
     if category and nid in node_coords:
         lat, lon = node_coords[nid]
-        return (nid, name, category, lat, lon)
+        street = tags.get("addr:street", "")
+        return (nid, name, category, lat, lon, street)
     return None
 
 
@@ -135,7 +135,7 @@ def _init_worker(graph_list, node_coords):
 
 def _find_nearest_node(place_data):
     """Worker function to find nearest graph node for a single place."""
-    pid, name, cat, plat, plon = place_data
+    pid, name, cat, plat, plon, street = place_data
     best_node = None
     best_dist = float("inf")
     
@@ -146,7 +146,7 @@ def _find_nearest_node(place_data):
             best_dist = d
             best_node = nid
             
-    return Place(pid, name, cat, plat, plon, best_node)
+    return Place(pid, name, cat, plat, plon, best_node, street)
 
 
 def map_places_to_nearest_nodes(places_raw, graph_nodes, node_coords):

@@ -1,4 +1,4 @@
-# Real-World Route Planner
+# Route Planner
 
 A route planning application that finds the shortest path between locations using **Dijkstra's algorithm** on real-world road network data from **OpenStreetMap (OSM)**.
 
@@ -189,13 +189,12 @@ We exclude: footpaths, cycleways, construction zones, private roads.
 For each road segment, we calculate travel time (not just distance):
 
 ```python
-time_minutes = distance_km / (speed_kmh / 60) + intersection_delay
+time_minutes = distance_km / (speed_kmh / 60)
 ```
 
 Where:
 - **Distance**: Calculated using the Haversine formula (accounts for Earth's curvature)
-- **Speed**: Realistic average speed based on road type (accounting for traffic, lights)
-- **Intersection delay**: ~9 seconds per intersection for stops/turns
+- **Speed**: Realistic average speed based on road type (already accounts for traffic, lights, and typical delays)
 
 #### 4. One-Way Road Handling
 OSM tags indicate road directionality:

@@ -3,7 +3,7 @@
 from collections import namedtuple
 
 # Named tuple for places
-Place = namedtuple("Place", ["id", "name", "category", "lat", "lon", "nearest_node"])
+Place = namedtuple("Place", ["id", "name", "category", "lat", "lon", "nearest_node", "street"])
 
 # Realistic average speeds (km/h) - accounting for traffic, lights, acceleration/deceleration
 ROAD_SPEED = {
