@@ -474,13 +474,25 @@ function showResults() {
     elements.theoryTable.innerHTML = state.results.map(r => {
         const spaceClass = r.spaceNote === 'Highest' ? 'space-high' : 
                           r.spaceNote === 'High' ? 'space-medium' : 'space-low';
+        // Format measured memory
+        let measuredMem = '-';
+        if (r.estimatedMemoryKB > 0) {
+            if (r.estimatedMemoryKB >= 1024) {
+                measuredMem = `${(r.estimatedMemoryKB / 1024).toFixed(2)} MB`;
+            } else {
+                measuredMem = `${r.estimatedMemoryKB.toFixed(1)} KB`;
+            }
+        }
         return `
             <tr>
                 <td class="algo-name">${r.name}</td>
                 <td class="complexity time-complexity">${r.timeComplexity}</td>
                 <td class="complexity space-complexity">
-                    <span class="space-badge ${spaceClass}">${r.spaceNote}</span>
-                    <span class="space-formula">${r.spaceComplexity}</span>
+                    <div class="space-static">
+                        <span class="space-badge ${spaceClass}">${r.spaceNote}</span>
+                        <span class="space-formula">${r.spaceComplexity}</span>
+                    </div>
+                    <span class="measured-memory">Measured: ${measuredMem}</span>
                 </td>
                 <td class="description">${r.description}</td>
             </tr>
@@ -493,18 +505,29 @@ function showResults() {
     elements.graphSizeInfo.textContent = `Graph size: V = ${numVertices.toLocaleString()} vertices, E = ${numEdges.toLocaleString()} edges`;
     
     // Performance table
-    elements.performanceTable.innerHTML = state.results.map(r => `
+    elements.performanceTable.innerHTML = state.results.map(r => {
+        // Format memory display
+        let memDisplay = '-';
+        if (r.estimatedMemoryKB > 0) {
+            if (r.estimatedMemoryKB >= 1024) {
+                memDisplay = `${(r.estimatedMemoryKB / 1024).toFixed(2)} MB`;
+            } else {
+                memDisplay = `${r.estimatedMemoryKB.toFixed(1)} KB`;
+            }
+        }
+        return `
         <tr>
             <td class="algo-name">${r.name}</td>
             <td class="num">${r.path ? `${r.travelTime.toFixed(1)} min` : '-'}</td>
             <td class="num">${r.nodesExplored.toLocaleString()}</td>
             <td class="num">${r.execTimeMs.toFixed(2)}</td>
+            <td class="num memory-cell">${memDisplay}</td>
             <td class="num">${r.path ? r.pathLength : '-'}</td>
             <td class="${r.path ? 'status-found' : 'status-notfound'}">
                 ${r.path ? '✔ Found' : '✘ No Path'}
             </td>
         </tr>
-    `).join('');
+    `}).join('');
     
     // Analysis
     renderAnalysis();
@@ -624,6 +647,23 @@ function renderAnalysis() {
         `;
     }
     
+    // Memory efficiency stat
+    const lowestMemory = successful.reduce((a, b) => a.estimatedMemoryKB < b.estimatedMemoryKB ? a : b);
+    let memDisplay = lowestMemory.estimatedMemoryKB >= 1024 
+        ? `${(lowestMemory.estimatedMemoryKB / 1024).toFixed(2)} MB` 
+        : `${lowestMemory.estimatedMemoryKB.toFixed(1)} KB`;
+    
+    html += `
+        <div class="stat-card memory">
+            <div class="icon-wrapper">💾</div>
+            <div class="stat-content">
+                <div class="stat-label">Lowest Memory</div>
+                <div class="stat-value">${lowestMemory.name}</div>
+                <div class="stat-sub">~${memDisplay} estimated</div>
+            </div>
+        </div>
+    `;
+
     // Calculate efficiency vs Dijkstra
     const dijkstraResult = successful.find(r => r.name === 'Dijkstra');
     if (dijkstraResult) {

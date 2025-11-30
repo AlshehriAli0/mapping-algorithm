@@ -49,6 +49,8 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
     let nodesExplored = 0;
     const visitedOrder = [];
 
+    let maxPqSize = 1;
+
     while (pq.size() > 0) {
         const [curT, u] = pq.pop();
         nodesExplored++;
@@ -69,16 +71,20 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
                 dist.set(v, nt);
                 parent.set(v, u);
                 pq.push([nt, v]);
+                maxPqSize = Math.max(maxPqSize, pq.size());
             }
         }
     }
 
+    // Estimate memory: ~100 bytes per Map entry (key + value + overhead), ~50 bytes per PQ entry
+    const estimatedMemoryKB = ((dist.size * 100) + (parent.size * 100) + (maxPqSize * 50)) / 1024;
+
     if (!dist.has(target)) {
-        return { path: null, travelTime: null, nodesExplored, visitedOrder };
+        return { path: null, travelTime: null, nodesExplored, visitedOrder, estimatedMemoryKB };
     }
 
     const path = reconstructPath(parent, target);
-    return { path, travelTime: dist.get(target), nodesExplored, visitedOrder };
+    return { path, travelTime: dist.get(target), nodesExplored, visitedOrder, estimatedMemoryKB };
 }
 
 /**
@@ -91,7 +97,7 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
  */
 export function astar(graph, start, target, nodeCoords) {
     if (!nodeCoords.has(target) || !nodeCoords.has(start)) {
-        return { path: null, travelTime: null, nodesExplored: 0, visitedOrder: [] };
+        return { path: null, travelTime: null, nodesExplored: 0, visitedOrder: [], estimatedMemoryKB: 0 };
     }
 
     const [targetLat, targetLon] = nodeCoords.get(target);
@@ -111,6 +117,7 @@ export function astar(graph, start, target, nodeCoords) {
     pq.push([fScore.get(start), 0, start]);
     let nodesExplored = 0;
     const visitedOrder = [];
+    let maxPqSize = 1;
 
     while (pq.size() > 0) {
         const [_, curG, u] = pq.pop();
@@ -134,16 +141,20 @@ export function astar(graph, start, target, nodeCoords) {
                 fScore.set(v, f);
                 parent.set(v, u);
                 pq.push([f, tentativeG, v]);
+                maxPqSize = Math.max(maxPqSize, pq.size());
             }
         }
     }
 
+    // Estimate memory: gScore + fScore + parent maps + PQ
+    const estimatedMemoryKB = ((gScore.size * 100) + (fScore.size * 100) + (parent.size * 100) + (maxPqSize * 70)) / 1024;
+
     if (!gScore.has(target)) {
-        return { path: null, travelTime: null, nodesExplored, visitedOrder };
+        return { path: null, travelTime: null, nodesExplored, visitedOrder, estimatedMemoryKB };
     }
 
     const path = reconstructPath(parent, target);
-    return { path, travelTime: gScore.get(target), nodesExplored, visitedOrder };
+    return { path, travelTime: gScore.get(target), nodesExplored, visitedOrder, estimatedMemoryKB };
 }
 
 /**
@@ -157,12 +168,14 @@ export function astar(graph, start, target, nodeCoords) {
 export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
     // Build reverse graph
     const reverseGraph = new Map();
+    let reverseGraphEdges = 0;
     for (const [u, neighbors] of graph) {
         for (const [v, w] of neighbors) {
             if (!reverseGraph.has(v)) {
                 reverseGraph.set(v, []);
             }
             reverseGraph.get(v).push([u, w]);
+            reverseGraphEdges++;
         }
     }
 
@@ -182,6 +195,8 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
     let meetingNode = null;
     let nodesExplored = 0;
     const visitedOrder = [];
+    let maxPqFSize = 1;
+    let maxPqBSize = 1;
 
     const settledF = new Set();
     const settledB = new Set();
@@ -212,6 +227,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
                         distF.set(v, nt);
                         parentF.set(v, u);
                         pqF.push([nt, v]);
+                        maxPqFSize = Math.max(maxPqFSize, pqF.size());
                     }
                 }
             }
@@ -242,6 +258,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
                         distB.set(v, nt);
                         parentB.set(v, u);
                         pqB.push([nt, v]);
+                        maxPqBSize = Math.max(maxPqBSize, pqB.size());
                     }
                 }
             }
@@ -255,8 +272,15 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
         }
     }
 
+    // Estimate memory: reverse graph + 2x (dist + parent + settled) + 2x PQ
+    // Reverse graph: ~50 bytes per edge stored
+    const reverseGraphMem = reverseGraphEdges * 50;
+    const forwardMem = (distF.size * 100) + (parentF.size * 100) + (settledF.size * 50) + (maxPqFSize * 50);
+    const backwardMem = (distB.size * 100) + (parentB.size * 100) + (settledB.size * 50) + (maxPqBSize * 50);
+    const estimatedMemoryKB = (reverseGraphMem + forwardMem + backwardMem) / 1024;
+
     if (meetingNode === null) {
-        return { path: null, travelTime: null, nodesExplored, visitedOrder };
+        return { path: null, travelTime: null, nodesExplored, visitedOrder, estimatedMemoryKB };
     }
 
     // Reconstruct path: start -> meetingNode -> target
@@ -267,7 +291,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
     // Combine paths (meeting node appears in both, so skip duplicate)
     const fullPath = pathToMeeting.concat(pathFromMeeting.slice(1));
 
-    return { path: fullPath, travelTime: bestPathCost, nodesExplored, visitedOrder };
+    return { path: fullPath, travelTime: bestPathCost, nodesExplored, visitedOrder, estimatedMemoryKB };
 }
 
 /**
@@ -298,7 +322,7 @@ function reconstructPath(parent, target) {
  */
 export function runAlgorithm(algo, graph, start, target, nodeCoords) {
     const startTime = performance.now();
-    const { path, travelTime, nodesExplored, visitedOrder } = algo.func(graph, start, target, nodeCoords);
+    const { path, travelTime, nodesExplored, visitedOrder, estimatedMemoryKB } = algo.func(graph, start, target, nodeCoords);
     const execTime = performance.now() - startTime;
 
     return {
@@ -307,6 +331,7 @@ export function runAlgorithm(algo, graph, start, target, nodeCoords) {
         travelTime,
         nodesExplored,
         visitedOrder,
+        estimatedMemoryKB: estimatedMemoryKB || 0,
         execTimeMs: execTime,
         timeComplexity: algo.timeComplexity,
         spaceComplexity: algo.spaceComplexity,
