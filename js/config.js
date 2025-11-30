@@ -29,9 +29,7 @@ export const PRESET_REGIONS = {
     "2": { name: "Dammam (Full City)",        bbox: [26.35, 49.95, 26.55, 50.15] },
     "3": { name: "Dhahran (Full City)",       bbox: [26.24, 50.08, 26.35, 50.18] },
     "4": { name: "Eastern Province Coast",    bbox: [26.15, 50.05, 26.55, 50.30] },
-    "5": { name: "Riyadh (Full City)",        bbox: [24.55, 46.55, 24.90, 46.90] },
-    "6": { name: "Jeddah (Full City)",        bbox: [21.40, 39.10, 21.75, 39.30] },
-    "7": { name: "Khobar Corniche (Small)",   bbox: [26.27, 50.20, 26.31, 50.24] },
-    "8": { name: "Dammam Downtown (Small)",   bbox: [26.41, 50.07, 26.45, 50.12] },
-    "9": { name: "Riyadh Center (Small)",     bbox: [24.68, 46.64, 24.74, 46.72] },
+    "5": { name: "Khobar Corniche (Small)",   bbox: [26.27, 50.20, 26.31, 50.24] },
+    "6": { name: "Dammam Downtown (Small)",   bbox: [26.41, 50.07, 26.45, 50.12] },
+    "7": { name: "Riyadh Center (Small)",     bbox: [24.68, 46.64, 24.74, 46.72] },
 };

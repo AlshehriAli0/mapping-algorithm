@@ -1105,8 +1105,49 @@ iframe {
 /* Dynamic Content Utilities */
 .complexity { font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); }
 .time-complexity { color: var(--success); }
-.space-complexity { color: var(--primary); }
+.space-complexity { 
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
 .description { color: var(--text-dim); font-size: 0.85rem; }
+
+/* Space complexity badges */
+.space-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    font-weight: 600;
+    font-family: var(--font-main);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    width: fit-content;
+}
+
+.space-badge.space-low {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.space-badge.space-medium {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.space-badge.space-high {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.space-formula {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-dim);
+}
 .num { font-family: var(--font-mono); }
 .stat-icon { font-size: 1.2rem; }
 .same-route { color: var(--success); font-weight: 500; margin-bottom: 0.5rem; }

@@ -462,14 +462,21 @@ function showResults() {
     elements.stepResults.style.display = 'block';
     
     // Theory table
-    elements.theoryTable.innerHTML = state.results.map(r => `
-        <tr>
-            <td class="algo-name">${r.name}</td>
-            <td class="complexity time-complexity">${r.timeComplexity}</td>
-            <td class="complexity space-complexity">${r.spaceComplexity}</td>
-            <td class="description">${r.description}</td>
-        </tr>
-    `).join('');
+    elements.theoryTable.innerHTML = state.results.map(r => {
+        const spaceClass = r.spaceNote === 'Highest' ? 'space-high' : 
+                          r.spaceNote === 'High' ? 'space-medium' : 'space-low';
+        return `
+            <tr>
+                <td class="algo-name">${r.name}</td>
+                <td class="complexity time-complexity">${r.timeComplexity}</td>
+                <td class="complexity space-complexity">
+                    <span class="space-badge ${spaceClass}">${r.spaceNote}</span>
+                    <span class="space-formula">${r.spaceComplexity}</span>
+                </td>
+                <td class="description">${r.description}</td>
+            </tr>
+        `;
+    }).join('');
     
     // Graph size info
     const numVertices = state.graph.size;

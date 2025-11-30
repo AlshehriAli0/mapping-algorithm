@@ -12,21 +12,24 @@ export const ALGORITHMS = [
         func: dijkstra,
         timeComplexity: "O((V + E) log V)",
         spaceComplexity: "O(V)",
-        description: "Classic shortest path. Explores all directions equally until target found."
+        spaceNote: "High",
+        description: "Classic shortest path. Explores all directions equally — visits many nodes, high memory."
     },
     {
         name: "A* (A-Star)",
         func: astar,
         timeComplexity: "O((V + E) log V)*",
-        spaceComplexity: "O(V)",
-        description: "Heuristic-guided search. Uses straight-line distance to prioritize promising paths."
+        spaceComplexity: "O(V)*",
+        spaceNote: "Medium",
+        description: "Heuristic-guided. Explores fewer nodes than Dijkstra — lower memory in practice."
     },
     {
         name: "Bidirectional Dijkstra",
         func: bidirectionalDijkstra,
         timeComplexity: "O((V + E) log V)",
-        spaceComplexity: "O(V)",
-        description: "Searches from both ends simultaneously, meeting in the middle."
+        spaceComplexity: "O(V + E)",
+        spaceNote: "Highest",
+        description: "Dual search from both ends. Needs reverse graph — highest memory overhead."
     }
 ];
 
@@ -299,6 +302,7 @@ export function runAlgorithm(algo, graph, start, target, nodeCoords) {
         execTimeMs: execTime,
         timeComplexity: algo.timeComplexity,
         spaceComplexity: algo.spaceComplexity,
+        spaceNote: algo.spaceNote,
         description: algo.description,
         pathLength: path ? path.length : 0,
         gmapsUrl: path ? buildGoogleMapsUrl(path, nodeCoords) : null
