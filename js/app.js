@@ -137,6 +137,11 @@ function setupEventListeners() {
 
 // Switch tabs
 function switchTab(tabId) {
+    // If a region is already selected, reset the process when switching selection methods
+    if (state.bbox) {
+        resetApp();
+    }
+
     elements.regionTabs.forEach(tab => {
         tab.classList.toggle('active', tab.dataset.tab === tabId);
     });
