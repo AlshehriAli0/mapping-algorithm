@@ -1276,6 +1276,19 @@ iframe {
     color: #67e8f9;
 }
 
+/* New Cards */
+.stat-card.coverage .icon-wrapper {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(168, 85, 247, 0.1));
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    color: #d8b4fe;
+}
+
+.stat-card.directness .icon-wrapper {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.1));
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fcd34d;
+}
+
 .stat-content {
     flex: 1;
     z-index: 1;

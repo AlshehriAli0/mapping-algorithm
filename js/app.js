@@ -4,6 +4,7 @@ import { PRESET_REGIONS } from './config.js';
 import { searchCityBbox, fetchOverpassData } from './api.js';
 import { parseOverpassToGraph, buildGraph, mapPlacesToNearestNodes, groupPlacesByCategory } from './graph.js';
 import { ALGORITHMS, runAlgorithm } from './routing.js';
+import { haversine } from './geo.js';
 
 // Application state
 const state = {
@@ -80,7 +81,7 @@ const elements = {
 let leafletMap = null;
 let routeLayer = null;
 let markersLayer = null;
-let visitedLayer = null;
+let canvasOverlay = null;
 
 // Initialize app
 function init() {
@@ -521,6 +522,24 @@ function showResults() {
     elements.stepResults.scrollIntoView({ behavior: 'smooth' });
 }
 
+// Calculate path distance in km
+function calculatePathDistanceKm(path) {
+    if (!path || path.length < 2) return 0;
+    
+    let dist = 0;
+    for (let i = 0; i < path.length - 1; i++) {
+        const u = path[i];
+        const v = path[i+1];
+        
+        if (state.nodeCoords.has(u) && state.nodeCoords.has(v)) {
+            const [lat1, lon1] = state.nodeCoords.get(u);
+            const [lat2, lon2] = state.nodeCoords.get(v);
+            dist += haversine(lat1, lon1, lat2, lon2);
+        }
+    }
+    return dist;
+}
+
 // Render analysis
 function renderAnalysis() {
     const successful = state.results.filter(r => r.path);
@@ -551,6 +570,44 @@ function renderAnalysis() {
             </div>
         </div>
     `;
+    
+    // New Stats
+    const graphSize = state.graph.size;
+    const exploredRatio = (leastNodes.nodesExplored / graphSize) * 100;
+    
+    html += `
+        <div class="stat-card coverage">
+            <div class="icon-wrapper">🌐</div>
+            <div class="stat-content">
+                <div class="stat-label">Search Coverage</div>
+                <div class="stat-value">${exploredRatio.toFixed(2)}%</div>
+                <div class="stat-sub">Of total graph visited</div>
+            </div>
+        </div>
+    `;
+
+    if (state.startPlace && state.destPlace) {
+        const start = state.startPlace.nearestNode;
+        const end = state.destPlace.nearestNode;
+        const [lat1, lon1] = state.nodeCoords.get(start);
+        const [lat2, lon2] = state.nodeCoords.get(end);
+        
+        const straightLineDist = haversine(lat1, lon1, lat2, lon2);
+        const pathDist = calculatePathDistanceKm(leastNodes.path);
+        
+        const efficiency = pathDist > 0 ? (straightLineDist / pathDist) * 100 : 0;
+        
+        html += `
+            <div class="stat-card directness">
+                <div class="icon-wrapper">📏</div>
+                <div class="stat-content">
+                    <div class="stat-label">Path Directness</div>
+                    <div class="stat-value">${efficiency.toFixed(1)}%</div>
+                    <div class="stat-sub">Straight line vs Actual</div>
+                </div>
+            </div>
+        `;
+    }
     
     // Calculate efficiency vs Dijkstra
     const dijkstraResult = successful.find(r => r.name === 'Dijkstra');
@@ -706,17 +763,102 @@ function initLeafletMap() {
     // Create layer groups for route and markers
     routeLayer = L.layerGroup().addTo(leafletMap);
     markersLayer = L.layerGroup().addTo(leafletMap);
-    visitedLayer = L.layerGroup().addTo(leafletMap);
+
+    // Init Canvas overlay
+    initCanvasOverlay();
+}
+
+// Initialize custom canvas overlay
+function initCanvasOverlay() {
+    if (canvasOverlay) {
+        if (canvasOverlay._canvas) {
+            canvasOverlay._canvas.remove();
+        }
+        canvasOverlay = null;
+    }
+
+    // Custom Canvas Layer
+    L.CanvasOverlay = L.Layer.extend({
+        onAdd: function(map) {
+            this._map = map;
+            this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated');
+            this._canvas.style.zIndex = 300; // Above tiles, below markers
+            this._canvas.style.pointerEvents = 'none';
+            
+            const size = this._map.getSize();
+            this._canvas.width = size.x;
+            this._canvas.height = size.y;
+            
+            const animated = this._map.options.zoomAnimation && L.Browser.any3d;
+            L.DomUtil.addClass(this._canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
+            
+            map.getPanes().overlayPane.appendChild(this._canvas);
+            map.on('moveend', this._reset, this);
+            map.on('resize', this._resize, this);
+            map.on('zoomstart', this._clear, this); // Clear during zoom
+            
+            this._ctx = this._canvas.getContext('2d');
+            this._points = []; 
+            this._reset();
+        },
+
+        onRemove: function(map) {
+            map.getPanes().overlayPane.removeChild(this._canvas);
+            map.off('moveend', this._reset, this);
+            map.off('resize', this._resize, this);
+            map.off('zoomstart', this._clear, this);
+        },
+
+        _reset: function() {
+            const topLeft = this._map.containerPointToLayerPoint([0, 0]);
+            L.DomUtil.setPosition(this._canvas, topLeft);
+            this._redraw();
+        },
+
+        _resize: function(e) {
+            const size = e.newSize;
+            this._canvas.width = size.x;
+            this._canvas.height = size.y;
+            this._reset();
+        },
+        
+        _clear: function() {
+            this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+        },
+
+        _redraw: function() {
+            this._clear();
+            // Redraw points if we had a persistent store, but for animation we handle the loop externally
+            // Use this for re-projecting if we wanted to support zoom/pan during replay (omitted for simplicity/perf)
+        },
+
+        drawPoint: function(lat, lon, color) {
+            const point = this._map.latLngToContainerPoint([lat, lon]);
+            
+            // Simple circle
+            this._ctx.fillStyle = color;
+            this._ctx.beginPath();
+            this._ctx.arc(point.x, point.y, 2, 0, 2 * Math.PI);
+            this._ctx.fill();
+        },
+        
+        clear: function() {
+            this._clear();
+        }
+    });
+
+    canvasOverlay = new L.CanvasOverlay();
+    canvasOverlay.addTo(leafletMap);
 }
 
 // Display route on the Leaflet map
 function displayRouteOnMap(path) {
     if (!leafletMap || !path || path.length < 2) return;
     
-    // Clear existing route and markers and visited
+    // Clear existing route and markers
     routeLayer.clearLayers();
     markersLayer.clearLayers();
-    visitedLayer.clearLayers();
+    if (canvasOverlay) canvasOverlay.clear();
     
     // Get coordinates for all nodes in the path
     const coords = path
@@ -771,11 +913,6 @@ function handleReplay() {
     const successful = state.results.filter(r => r.path);
     if (successful.length === 0) return;
     
-    // Use the current result index from successful results
-    // Note: state.currentResultIndex maps to the index in 'successful', not 'state.results'
-    // Wait, logic in renderMapEmbed used data-index which was index in 'successful'
-    // So state.currentResultIndex is correct for 'successful'
-    
     if (state.currentResultIndex >= successful.length) return;
     
     const result = successful[state.currentResultIndex];
@@ -784,7 +921,7 @@ function handleReplay() {
 
 // Animate search process
 async function animateSearch(result) {
-    if (!leafletMap || !result.visitedOrder) return;
+    if (!leafletMap || !result.visitedOrder || !canvasOverlay) return;
 
     const visited = result.visitedOrder;
     if (visited.length === 0) return;
@@ -793,15 +930,16 @@ async function animateSearch(result) {
     elements.replayBtn.disabled = true;
     elements.replayBtn.textContent = '⏳ Playing...';
     
-    // Clear route and visited layers, keep markers
+    // Clear layers
     routeLayer.clearLayers();
-    visitedLayer.clearLayers();
+    canvasOverlay.clear();
     
     // Calculate animation speed
-    // Target duration: ~3-5 seconds
     const totalNodes = visited.length;
-    const targetDuration = 4000; // ms
-    const batchSize = Math.max(5, Math.ceil(totalNodes / (targetDuration / 16))); // nodes per frame (60fps)
+    const targetDuration = 3000; // 3s target
+    // Limit FPS to 60, so frames = duration / 16
+    // Batch size = nodes / frames
+    const batchSize = Math.max(10, Math.ceil(totalNodes / (targetDuration / 16)));
     
     let currentIndex = 0;
     
@@ -816,19 +954,12 @@ async function animateSearch(result) {
             if (state.nodeCoords.has(nodeId)) {
                 const [lat, lon] = state.nodeCoords.get(nodeId);
                 
-                let color = '#06b6d4'; // Cyan (Default/Dijkstra)
-                if (result.name.includes('A*')) color = '#8b5cf6'; // Purple
-                if (side === 'start') color = '#3b82f6'; // Blue
-                if (side === 'end') color = '#ef4444'; // Red
+                let color = 'rgba(6, 182, 212, 0.5)'; // Cyan (Default/Dijkstra)
+                if (result.name.includes('A*')) color = 'rgba(139, 92, 246, 0.5)'; // Purple
+                if (side === 'start') color = 'rgba(59, 130, 246, 0.5)'; // Blue
+                if (side === 'end') color = 'rgba(239, 68, 68, 0.5)'; // Red
                 
-                L.circleMarker([lat, lon], {
-                    radius: 3,
-                    fillColor: color,
-                    color: null, 
-                    weight: 0,
-                    fillOpacity: 0.5,
-                    renderer: L.canvas()
-                }).addTo(visitedLayer);
+                canvasOverlay.drawPoint(lat, lon, color);
             }
         }
         
@@ -871,10 +1002,6 @@ function finishAnimation(path) {
             opacity: 0.5,
             lineJoin: 'round'
         }).addTo(routeLayer);
-        
-        // Bring markers to front
-        // Leaflet doesn't have easy z-index for layers, but markers are usually on top.
-        // If needed we can re-add markers.
     }
 }
 
@@ -886,7 +1013,7 @@ function resetApp() {
         leafletMap = null;
         routeLayer = null;
         markersLayer = null;
-        visitedLayer = null;
+        canvasOverlay = null;
     }
     
     // Reset state
