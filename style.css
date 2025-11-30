@@ -1289,6 +1289,12 @@ iframe {
     color: #fcd34d;
 }
 
+.stat-card.throughput .icon-wrapper {
+    background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(236, 72, 153, 0.1));
+    border: 1px solid rgba(236, 72, 153, 0.3);
+    color: #f9a8d4;
+}
+
 .stat-content {
     flex: 1;
     z-index: 1;

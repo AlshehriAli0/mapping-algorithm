@@ -552,6 +552,13 @@ function renderAnalysis() {
     const fastest = successful.reduce((a, b) => a.execTimeMs < b.execTimeMs ? a : b);
     const leastNodes = successful.reduce((a, b) => a.nodesExplored < b.nodesExplored ? a : b);
     
+    // Calculate throughput (nodes per ms) for each algorithm
+    const throughputs = successful.map(r => ({
+        ...r,
+        throughput: r.execTimeMs > 0 ? r.nodesExplored / r.execTimeMs : 0
+    }));
+    const highestThroughput = throughputs.reduce((a, b) => a.throughput > b.throughput ? a : b);
+    
     let html = `
         <div class="stat-card speed">
             <div class="icon-wrapper">⚡</div>
@@ -567,6 +574,14 @@ function renderAnalysis() {
                 <div class="stat-label">Most Efficient</div>
                 <div class="stat-value">${leastNodes.name}</div>
                 <div class="stat-sub">${leastNodes.nodesExplored.toLocaleString()} nodes explored</div>
+            </div>
+        </div>
+        <div class="stat-card throughput">
+            <div class="icon-wrapper">🚀</div>
+            <div class="stat-content">
+                <div class="stat-label">Search Throughput</div>
+                <div class="stat-value">${highestThroughput.name}</div>
+                <div class="stat-sub">${highestThroughput.throughput.toFixed(1)} nodes/ms</div>
             </div>
         </div>
     `;
