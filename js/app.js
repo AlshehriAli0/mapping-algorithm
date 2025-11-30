@@ -1006,32 +1006,60 @@ async function animateSearch(result) {
 }
 
 function finishAnimation(path) {
-    elements.replayBtn.disabled = false;
-    elements.replayBtn.textContent = '▶ Replay Search';
-    
-    // Draw path on top
-    if (path && path.length > 1) {
-        const coords = path
-            .filter(nid => state.nodeCoords.has(nid))
-            .map(nid => {
-                const [lat, lon] = state.nodeCoords.get(nid);
-                return [lat, lon];
-            });
-            
-        L.polyline(coords, {
-            color: '#ffffff', // White core
-            weight: 4,
-            opacity: 1,
-            lineJoin: 'round'
-        }).addTo(routeLayer);
-        
-        L.polyline(coords, {
-            color: '#3b82f6', // Blue glow
-            weight: 8,
-            opacity: 0.5,
-            lineJoin: 'round'
-        }).addTo(routeLayer);
+    if (!path || path.length < 2) {
+        elements.replayBtn.disabled = false;
+        elements.replayBtn.textContent = '▶ Replay Search';
+        return;
     }
+
+    const coords = path
+        .filter(nid => state.nodeCoords.has(nid))
+        .map(nid => {
+            const [lat, lon] = state.nodeCoords.get(nid);
+            return [lat, lon];
+        });
+
+    // Create empty polylines
+    const glowLine = L.polyline([], {
+        color: '#3b82f6', // Blue glow
+        weight: 8,
+        opacity: 0.5,
+        lineJoin: 'round'
+    }).addTo(routeLayer);
+
+    const coreLine = L.polyline([], {
+        color: '#ffffff', // White core
+        weight: 4,
+        opacity: 1,
+        lineJoin: 'round'
+    }).addTo(routeLayer);
+
+    let currentIndex = 0;
+    const totalPoints = coords.length;
+    const duration = 1500; // 1.5 seconds for path animation
+    // Calculate points per frame to match duration (assuming 60fps)
+    const pointsPerFrame = Math.max(1, Math.ceil(totalPoints / (duration / 16)));
+
+    function frame() {
+        const end = Math.min(currentIndex + pointsPerFrame, totalPoints);
+        
+        // Slice path to current progress
+        const currentSegment = coords.slice(0, end);
+        
+        glowLine.setLatLngs(currentSegment);
+        coreLine.setLatLngs(currentSegment);
+        
+        currentIndex = end;
+        
+        if (currentIndex < totalPoints) {
+            requestAnimationFrame(frame);
+        } else {
+            elements.replayBtn.disabled = false;
+            elements.replayBtn.textContent = '▶ Replay Search';
+        }
+    }
+    
+    requestAnimationFrame(frame);
 }
 
 // Reset app
