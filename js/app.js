@@ -766,88 +766,90 @@ function initLeafletMap() {
 
     // Init Canvas overlay
     initCanvasOverlay();
+    
+    // Force a resize check to ensure tiles render
+    setTimeout(() => {
+        leafletMap.invalidateSize();
+    }, 100);
 }
+
+// Define CanvasOverlay class
+const CanvasOverlay = L.Layer.extend({
+    onAdd: function(map) {
+        this._map = map;
+        this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated');
+        this._canvas.style.zIndex = '100'; 
+        this._canvas.style.pointerEvents = 'none';
+        
+        const size = this._map.getSize();
+        this._canvas.width = size.x;
+        this._canvas.height = size.y;
+        
+        const animated = this._map.options.zoomAnimation && L.Browser.any3d;
+        L.DomUtil.addClass(this._canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
+        
+        map.getPanes().overlayPane.appendChild(this._canvas);
+        map.on('moveend', this._reset, this);
+        map.on('resize', this._resize, this);
+        map.on('zoomstart', this._clear, this); 
+        
+        this._ctx = this._canvas.getContext('2d');
+        this._reset();
+    },
+
+    onRemove: function(map) {
+        map.getPanes().overlayPane.removeChild(this._canvas);
+        map.off('moveend', this._reset, this);
+        map.off('resize', this._resize, this);
+        map.off('zoomstart', this._clear, this);
+    },
+
+    _reset: function() {
+        const topLeft = this._map.containerPointToLayerPoint([0, 0]);
+        L.DomUtil.setPosition(this._canvas, topLeft);
+        this._redraw();
+    },
+
+    _resize: function(e) {
+        const size = e.newSize;
+        this._canvas.width = size.x;
+        this._canvas.height = size.y;
+        this._reset();
+    },
+    
+    _clear: function() {
+        if (this._ctx) {
+            this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+        }
+    },
+
+    _redraw: function() {
+        this._clear();
+    },
+
+    drawPoint: function(lat, lon, color) {
+        if (!this._ctx) return;
+        const point = this._map.latLngToContainerPoint([lat, lon]);
+        
+        this._ctx.fillStyle = color;
+        this._ctx.beginPath();
+        this._ctx.arc(point.x, point.y, 2, 0, 2 * Math.PI);
+        this._ctx.fill();
+    },
+    
+    clear: function() {
+        this._clear();
+    }
+});
 
 // Initialize custom canvas overlay
 function initCanvasOverlay() {
     if (canvasOverlay) {
-        if (canvasOverlay._canvas) {
-            canvasOverlay._canvas.remove();
-        }
+        canvasOverlay.remove();
         canvasOverlay = null;
     }
 
-    // Custom Canvas Layer
-    L.CanvasOverlay = L.Layer.extend({
-        onAdd: function(map) {
-            this._map = map;
-            this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated');
-            this._canvas.style.zIndex = 300; // Above tiles, below markers
-            this._canvas.style.pointerEvents = 'none';
-            
-            const size = this._map.getSize();
-            this._canvas.width = size.x;
-            this._canvas.height = size.y;
-            
-            const animated = this._map.options.zoomAnimation && L.Browser.any3d;
-            L.DomUtil.addClass(this._canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
-            
-            map.getPanes().overlayPane.appendChild(this._canvas);
-            map.on('moveend', this._reset, this);
-            map.on('resize', this._resize, this);
-            map.on('zoomstart', this._clear, this); // Clear during zoom
-            
-            this._ctx = this._canvas.getContext('2d');
-            this._points = []; 
-            this._reset();
-        },
-
-        onRemove: function(map) {
-            map.getPanes().overlayPane.removeChild(this._canvas);
-            map.off('moveend', this._reset, this);
-            map.off('resize', this._resize, this);
-            map.off('zoomstart', this._clear, this);
-        },
-
-        _reset: function() {
-            const topLeft = this._map.containerPointToLayerPoint([0, 0]);
-            L.DomUtil.setPosition(this._canvas, topLeft);
-            this._redraw();
-        },
-
-        _resize: function(e) {
-            const size = e.newSize;
-            this._canvas.width = size.x;
-            this._canvas.height = size.y;
-            this._reset();
-        },
-        
-        _clear: function() {
-            this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-        },
-
-        _redraw: function() {
-            this._clear();
-            // Redraw points if we had a persistent store, but for animation we handle the loop externally
-            // Use this for re-projecting if we wanted to support zoom/pan during replay (omitted for simplicity/perf)
-        },
-
-        drawPoint: function(lat, lon, color) {
-            const point = this._map.latLngToContainerPoint([lat, lon]);
-            
-            // Simple circle
-            this._ctx.fillStyle = color;
-            this._ctx.beginPath();
-            this._ctx.arc(point.x, point.y, 2, 0, 2 * Math.PI);
-            this._ctx.fill();
-        },
-        
-        clear: function() {
-            this._clear();
-        }
-    });
-
-    canvasOverlay = new L.CanvasOverlay();
+    canvasOverlay = new CanvasOverlay();
     canvasOverlay.addTo(leafletMap);
 }
 
