@@ -39,7 +39,7 @@ export const ALGORITHMS = [
  * @param {string} start - Start node ID
  * @param {string} target - Target node ID
  * @param {Map} nodeCoords - Node coordinates (not used, kept for consistent interface)
- * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number }}
+ * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array }}
  */
 export function dijkstra(graph, start, target, nodeCoords = null) {
     const dist = new Map([[start, 0]]);
@@ -47,10 +47,12 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
     const pq = new MinHeap();
     pq.push([0, start]);
     let nodesExplored = 0;
+    const visitedOrder = [];
 
     while (pq.size() > 0) {
         const [curT, u] = pq.pop();
         nodesExplored++;
+        visitedOrder.push(u);
         
         if (u === target) {
             break;
@@ -72,11 +74,11 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
     }
 
     if (!dist.has(target)) {
-        return { path: null, travelTime: null, nodesExplored };
+        return { path: null, travelTime: null, nodesExplored, visitedOrder };
     }
 
     const path = reconstructPath(parent, target);
-    return { path, travelTime: dist.get(target), nodesExplored };
+    return { path, travelTime: dist.get(target), nodesExplored, visitedOrder };
 }
 
 /**
@@ -85,11 +87,11 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
  * @param {string} start - Start node ID
  * @param {string} target - Target node ID
  * @param {Map} nodeCoords - Node coordinates map
- * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number }}
+ * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array }}
  */
 export function astar(graph, start, target, nodeCoords) {
     if (!nodeCoords.has(target) || !nodeCoords.has(start)) {
-        return { path: null, travelTime: null, nodesExplored: 0 };
+        return { path: null, travelTime: null, nodesExplored: 0, visitedOrder: [] };
     }
 
     const [targetLat, targetLon] = nodeCoords.get(target);
@@ -108,10 +110,12 @@ export function astar(graph, start, target, nodeCoords) {
     const pq = new MinHeap();
     pq.push([fScore.get(start), 0, start]);
     let nodesExplored = 0;
+    const visitedOrder = [];
 
     while (pq.size() > 0) {
         const [_, curG, u] = pq.pop();
         nodesExplored++;
+        visitedOrder.push(u);
 
         if (u === target) {
             break;
@@ -135,11 +139,11 @@ export function astar(graph, start, target, nodeCoords) {
     }
 
     if (!gScore.has(target)) {
-        return { path: null, travelTime: null, nodesExplored };
+        return { path: null, travelTime: null, nodesExplored, visitedOrder };
     }
 
     const path = reconstructPath(parent, target);
-    return { path, travelTime: gScore.get(target), nodesExplored };
+    return { path, travelTime: gScore.get(target), nodesExplored, visitedOrder };
 }
 
 /**
@@ -148,7 +152,7 @@ export function astar(graph, start, target, nodeCoords) {
  * @param {string} start - Start node ID
  * @param {string} target - Target node ID
  * @param {Map} nodeCoords - Node coordinates (not used)
- * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number }}
+ * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array }}
  */
 export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
     // Build reverse graph
@@ -177,6 +181,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
     let bestPathCost = Infinity;
     let meetingNode = null;
     let nodesExplored = 0;
+    const visitedOrder = [];
 
     const settledF = new Set();
     const settledB = new Set();
@@ -186,6 +191,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
         if (pqF.size() > 0) {
             const [curT, u] = pqF.pop();
             nodesExplored++;
+            visitedOrder.push({ id: u, side: 'start' });
 
             if (curT <= (distF.get(u) ?? Infinity)) {
                 settledF.add(u);
@@ -215,6 +221,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
         if (pqB.size() > 0) {
             const [curT, u] = pqB.pop();
             nodesExplored++;
+            visitedOrder.push({ id: u, side: 'end' });
 
             if (curT <= (distB.get(u) ?? Infinity)) {
                 settledB.add(u);
@@ -249,7 +256,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
     }
 
     if (meetingNode === null) {
-        return { path: null, travelTime: null, nodesExplored };
+        return { path: null, travelTime: null, nodesExplored, visitedOrder };
     }
 
     // Reconstruct path: start -> meetingNode -> target
@@ -260,7 +267,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
     // Combine paths (meeting node appears in both, so skip duplicate)
     const fullPath = pathToMeeting.concat(pathFromMeeting.slice(1));
 
-    return { path: fullPath, travelTime: bestPathCost, nodesExplored };
+    return { path: fullPath, travelTime: bestPathCost, nodesExplored, visitedOrder };
 }
 
 /**
@@ -291,7 +298,7 @@ function reconstructPath(parent, target) {
  */
 export function runAlgorithm(algo, graph, start, target, nodeCoords) {
     const startTime = performance.now();
-    const { path, travelTime, nodesExplored } = algo.func(graph, start, target, nodeCoords);
+    const { path, travelTime, nodesExplored, visitedOrder } = algo.func(graph, start, target, nodeCoords);
     const execTime = performance.now() - startTime;
 
     return {
@@ -299,6 +306,7 @@ export function runAlgorithm(algo, graph, start, target, nodeCoords) {
         path,
         travelTime,
         nodesExplored,
+        visitedOrder,
         execTimeMs: execTime,
         timeComplexity: algo.timeComplexity,
         spaceComplexity: algo.spaceComplexity,

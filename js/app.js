@@ -14,7 +14,8 @@ const state = {
     categories: null,
     startPlace: null,
     destPlace: null,
-    results: []
+    results: [],
+    currentResultIndex: 0
 };
 
 // DOM Elements
@@ -71,13 +72,15 @@ const elements = {
     mapsGrid: document.getElementById('maps-grid'),
     mapTabs: document.getElementById('map-tabs'),
     routeMap: document.getElementById('route-map'),
-    resetBtn: document.getElementById('reset-btn')
+    resetBtn: document.getElementById('reset-btn'),
+    replayBtn: document.getElementById('replay-btn')
 };
 
 // Leaflet map instance
 let leafletMap = null;
 let routeLayer = null;
 let markersLayer = null;
+let visitedLayer = null;
 
 // Initialize app
 function init() {
@@ -133,6 +136,9 @@ function setupEventListeners() {
     
     // Reset button
     elements.resetBtn.addEventListener('click', resetApp);
+    
+    // Replay button
+    elements.replayBtn.addEventListener('click', handleReplay);
 }
 
 // Switch tabs
@@ -266,6 +272,7 @@ async function loadMapData() {
     state.startPlace = null;
     state.destPlace = null;
     state.results = [];
+    state.currentResultIndex = 0;
     
     // Reset UI for selection
     elements.startSelected.style.display = 'none';
@@ -452,6 +459,7 @@ function computeRoutes() {
         }
         
         state.results = results;
+        state.currentResultIndex = 0; // Reset to first result (Dijkstra)
         hideLoading();
         showResults();
     }, 50);
@@ -662,7 +670,9 @@ function renderMapEmbed() {
         btn.addEventListener('click', () => {
             elements.mapTabs.querySelectorAll('.map-tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            const result = successful[parseInt(btn.dataset.index)];
+            const index = parseInt(btn.dataset.index);
+            state.currentResultIndex = index;
+            const result = successful[index];
             displayRouteOnMap(result.path);
         });
     });
@@ -671,6 +681,7 @@ function renderMapEmbed() {
     initLeafletMap();
     
     // Show first result
+    state.currentResultIndex = 0;
     displayRouteOnMap(successful[0].path);
 }
 
@@ -695,15 +706,17 @@ function initLeafletMap() {
     // Create layer groups for route and markers
     routeLayer = L.layerGroup().addTo(leafletMap);
     markersLayer = L.layerGroup().addTo(leafletMap);
+    visitedLayer = L.layerGroup().addTo(leafletMap);
 }
 
 // Display route on the Leaflet map
 function displayRouteOnMap(path) {
     if (!leafletMap || !path || path.length < 2) return;
     
-    // Clear existing route and markers
+    // Clear existing route and markers and visited
     routeLayer.clearLayers();
     markersLayer.clearLayers();
+    visitedLayer.clearLayers();
     
     // Get coordinates for all nodes in the path
     const coords = path
@@ -753,6 +766,118 @@ function displayRouteOnMap(path) {
     });
 }
 
+// Handle Replay
+function handleReplay() {
+    const successful = state.results.filter(r => r.path);
+    if (successful.length === 0) return;
+    
+    // Use the current result index from successful results
+    // Note: state.currentResultIndex maps to the index in 'successful', not 'state.results'
+    // Wait, logic in renderMapEmbed used data-index which was index in 'successful'
+    // So state.currentResultIndex is correct for 'successful'
+    
+    if (state.currentResultIndex >= successful.length) return;
+    
+    const result = successful[state.currentResultIndex];
+    animateSearch(result);
+}
+
+// Animate search process
+async function animateSearch(result) {
+    if (!leafletMap || !result.visitedOrder) return;
+
+    const visited = result.visitedOrder;
+    if (visited.length === 0) return;
+
+    // Disable controls
+    elements.replayBtn.disabled = true;
+    elements.replayBtn.textContent = '⏳ Playing...';
+    
+    // Clear route and visited layers, keep markers
+    routeLayer.clearLayers();
+    visitedLayer.clearLayers();
+    
+    // Calculate animation speed
+    // Target duration: ~3-5 seconds
+    const totalNodes = visited.length;
+    const targetDuration = 4000; // ms
+    const batchSize = Math.max(5, Math.ceil(totalNodes / (targetDuration / 16))); // nodes per frame (60fps)
+    
+    let currentIndex = 0;
+    
+    function frame() {
+        const end = Math.min(currentIndex + batchSize, totalNodes);
+        
+        for (let i = currentIndex; i < end; i++) {
+            const item = visited[i];
+            const nodeId = typeof item === 'object' ? item.id : item;
+            const side = typeof item === 'object' ? item.side : null;
+            
+            if (state.nodeCoords.has(nodeId)) {
+                const [lat, lon] = state.nodeCoords.get(nodeId);
+                
+                let color = '#06b6d4'; // Cyan (Default/Dijkstra)
+                if (result.name.includes('A*')) color = '#8b5cf6'; // Purple
+                if (side === 'start') color = '#3b82f6'; // Blue
+                if (side === 'end') color = '#ef4444'; // Red
+                
+                L.circleMarker([lat, lon], {
+                    radius: 3,
+                    fillColor: color,
+                    color: null, 
+                    weight: 0,
+                    fillOpacity: 0.5,
+                    renderer: L.canvas()
+                }).addTo(visitedLayer);
+            }
+        }
+        
+        currentIndex = end;
+        
+        if (currentIndex < totalNodes) {
+            requestAnimationFrame(frame);
+        } else {
+            // Animation done, draw the final path
+            finishAnimation(result.path);
+        }
+    }
+    
+    requestAnimationFrame(frame);
+}
+
+function finishAnimation(path) {
+    elements.replayBtn.disabled = false;
+    elements.replayBtn.textContent = '▶ Replay Search';
+    
+    // Draw path on top
+    if (path && path.length > 1) {
+        const coords = path
+            .filter(nid => state.nodeCoords.has(nid))
+            .map(nid => {
+                const [lat, lon] = state.nodeCoords.get(nid);
+                return [lat, lon];
+            });
+            
+        L.polyline(coords, {
+            color: '#ffffff', // White core
+            weight: 4,
+            opacity: 1,
+            lineJoin: 'round'
+        }).addTo(routeLayer);
+        
+        L.polyline(coords, {
+            color: '#3b82f6', // Blue glow
+            weight: 8,
+            opacity: 0.5,
+            lineJoin: 'round'
+        }).addTo(routeLayer);
+        
+        // Bring markers to front
+        // Leaflet doesn't have easy z-index for layers, but markers are usually on top.
+        // If needed we can re-add markers.
+    }
+}
+
 // Reset app
 function resetApp() {
     // Clean up Leaflet map
@@ -761,6 +886,7 @@ function resetApp() {
         leafletMap = null;
         routeLayer = null;
         markersLayer = null;
+        visitedLayer = null;
     }
     
     // Reset state
@@ -772,6 +898,7 @@ function resetApp() {
     state.startPlace = null;
     state.destPlace = null;
     state.results = [];
+    state.currentResultIndex = 0;
     
     // Reset UI
     elements.selectedRegion.style.display = 'none';
