@@ -39,7 +39,7 @@ export const ALGORITHMS = [
  * @param {string} start - Start node ID
  * @param {string} target - Target node ID
  * @param {Map} nodeCoords - Node coordinates (not used, kept for consistent interface)
- * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array }}
+ * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array, estimatedMemoryKB: number }}
  */
 export function dijkstra(graph, start, target, nodeCoords = null) {
     const dist = new Map([[start, 0]]);
@@ -53,15 +53,17 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
 
     while (pq.size() > 0) {
         const [curT, u] = pq.pop();
-        nodesExplored++;
-        visitedOrder.push({ id: u, parent: parent.get(u) });
-        
-        if (u === target) {
-            break;
-        }
-        
+
+        // Skip stale entries
         if (curT > (dist.get(u) ?? Infinity)) {
             continue;
+        }
+
+        nodesExplored++;
+        visitedOrder.push({ id: u, parent: parent.get(u) });
+
+        if (u === target) {
+            break;
         }
 
         const neighbors = graph.get(u) || [];
@@ -93,7 +95,7 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
  * @param {string} start - Start node ID
  * @param {string} target - Target node ID
  * @param {Map} nodeCoords - Node coordinates map
- * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array }}
+ * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array, estimatedMemoryKB: number }}
  */
 export function astar(graph, start, target, nodeCoords) {
     if (!nodeCoords.has(target) || !nodeCoords.has(start)) {
@@ -107,13 +109,14 @@ export function astar(graph, start, target, nodeCoords) {
         if (!nodeCoords.has(node)) return 0;
         const [lat, lon] = nodeCoords.get(node);
         const distKm = haversine(lat, lon, targetLat, targetLon);
-        return distKm / (60 / 60.0); // Convert to minutes
+        return distKm / (60 / 60.0); // Convert to minutes (assuming edge weights are minutes)
     };
 
     const gScore = new Map([[start, 0]]);
     const fScore = new Map([[start, heuristic(start)]]);
     const parent = new Map([[start, null]]);
     const pq = new MinHeap();
+    // [fScore, gScore, node]
     pq.push([fScore.get(start), 0, start]);
     let nodesExplored = 0;
     const visitedOrder = [];
@@ -121,15 +124,17 @@ export function astar(graph, start, target, nodeCoords) {
 
     while (pq.size() > 0) {
         const [_, curG, u] = pq.pop();
+
+        // Skip stale entries (this PQ entry uses an outdated gScore)
+        if (curG > (gScore.get(u) ?? Infinity)) {
+            continue;
+        }
+
         nodesExplored++;
         visitedOrder.push({ id: u, parent: parent.get(u) });
 
         if (u === target) {
             break;
-        }
-
-        if (curG > (gScore.get(u) ?? Infinity)) {
-            continue;
         }
 
         const neighbors = graph.get(u) || [];
@@ -163,7 +168,7 @@ export function astar(graph, start, target, nodeCoords) {
  * @param {string} start - Start node ID
  * @param {string} target - Target node ID
  * @param {Map} nodeCoords - Node coordinates (not used)
- * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array }}
+ * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array, estimatedMemoryKB: number }}
  */
 export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
     // Build reverse graph
@@ -205,10 +210,14 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
         // Expand forward
         if (pqF.size() > 0) {
             const [curT, u] = pqF.pop();
-            nodesExplored++;
-            visitedOrder.push({ id: u, side: 'start', parent: parentF.get(u) });
 
-            if (curT <= (distF.get(u) ?? Infinity)) {
+            // Skip stale entries
+            if (curT > (distF.get(u) ?? Infinity)) {
+                // Do not count or record visited for stale entries
+                // and do not add to settled
+            } else {
+                nodesExplored++;
+                visitedOrder.push({ id: u, side: 'start', parent: parentF.get(u) });
                 settledF.add(u);
 
                 // Check if we found a better path through this node
@@ -236,10 +245,13 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
         // Expand backward
         if (pqB.size() > 0) {
             const [curT, u] = pqB.pop();
-            nodesExplored++;
-            visitedOrder.push({ id: u, side: 'end', parent: parentB.get(u) });
 
-            if (curT <= (distB.get(u) ?? Infinity)) {
+            // Skip stale entries
+            if (curT > (distB.get(u) ?? Infinity)) {
+                // Same as forward: ignore stale entries completely
+            } else {
+                nodesExplored++;
+                visitedOrder.push({ id: u, side: 'end', parent: parentB.get(u) });
                 settledB.add(u);
 
                 // Check if we found a better path through this node
