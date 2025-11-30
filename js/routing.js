@@ -52,7 +52,7 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
     while (pq.size() > 0) {
         const [curT, u] = pq.pop();
         nodesExplored++;
-        visitedOrder.push(u);
+        visitedOrder.push({ id: u, parent: parent.get(u) });
         
         if (u === target) {
             break;
@@ -115,7 +115,7 @@ export function astar(graph, start, target, nodeCoords) {
     while (pq.size() > 0) {
         const [_, curG, u] = pq.pop();
         nodesExplored++;
-        visitedOrder.push(u);
+        visitedOrder.push({ id: u, parent: parent.get(u) });
 
         if (u === target) {
             break;
@@ -191,7 +191,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
         if (pqF.size() > 0) {
             const [curT, u] = pqF.pop();
             nodesExplored++;
-            visitedOrder.push({ id: u, side: 'start' });
+            visitedOrder.push({ id: u, side: 'start', parent: parentF.get(u) });
 
             if (curT <= (distF.get(u) ?? Infinity)) {
                 settledF.add(u);
@@ -221,7 +221,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
         if (pqB.size() > 0) {
             const [curT, u] = pqB.pop();
             nodesExplored++;
-            visitedOrder.push({ id: u, side: 'end' });
+            visitedOrder.push({ id: u, side: 'end', parent: parentB.get(u) });
 
             if (curT <= (distB.get(u) ?? Infinity)) {
                 settledB.add(u);

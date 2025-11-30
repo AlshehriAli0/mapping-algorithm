@@ -836,6 +836,25 @@ const CanvasOverlay = L.Layer.extend({
         this._ctx.arc(point.x, point.y, 2, 0, 2 * Math.PI);
         this._ctx.fill();
     },
+
+    drawLines: function(lines, color, width) {
+        if (!this._ctx) return;
+        
+        this._ctx.strokeStyle = color;
+        this._ctx.lineWidth = width;
+        this._ctx.lineCap = 'round';
+        this._ctx.lineJoin = 'round';
+        this._ctx.beginPath();
+        
+        for (const [lat1, lon1, lat2, lon2] of lines) {
+            const p1 = this._map.latLngToContainerPoint([lat1, lon1]);
+            const p2 = this._map.latLngToContainerPoint([lat2, lon2]);
+            this._ctx.moveTo(p1.x, p1.y);
+            this._ctx.lineTo(p2.x, p2.y);
+        }
+        
+        this._ctx.stroke();
+    },
     
     clear: function() {
         this._clear();
@@ -939,30 +958,38 @@ async function animateSearch(result) {
     // Calculate animation speed
     const totalNodes = visited.length;
     const targetDuration = 3000; // 3s target
-    // Limit FPS to 60, so frames = duration / 16
-    // Batch size = nodes / frames
     const batchSize = Math.max(10, Math.ceil(totalNodes / (targetDuration / 16)));
     
     let currentIndex = 0;
     
     function frame() {
         const end = Math.min(currentIndex + batchSize, totalNodes);
+        const batchLines = {};
         
         for (let i = currentIndex; i < end; i++) {
             const item = visited[i];
+            // item is now object { id, parent, side } or just id (legacy safety)
             const nodeId = typeof item === 'object' ? item.id : item;
+            const parentId = typeof item === 'object' ? item.parent : null;
             const side = typeof item === 'object' ? item.side : null;
             
-            if (state.nodeCoords.has(nodeId)) {
-                const [lat, lon] = state.nodeCoords.get(nodeId);
-                
-                let color = 'rgba(6, 182, 212, 0.5)'; // Cyan (Default/Dijkstra)
-                if (result.name.includes('A*')) color = 'rgba(139, 92, 246, 0.5)'; // Purple
-                if (side === 'start') color = 'rgba(59, 130, 246, 0.5)'; // Blue
-                if (side === 'end') color = 'rgba(239, 68, 68, 0.5)'; // Red
-                
-                canvasOverlay.drawPoint(lat, lon, color);
+            let color = 'rgba(6, 182, 212, 0.6)'; // Cyan (Default/Dijkstra)
+            if (result.name.includes('A*')) color = 'rgba(139, 92, 246, 0.6)'; // Purple
+            if (side === 'start') color = 'rgba(59, 130, 246, 0.6)'; // Blue
+            if (side === 'end') color = 'rgba(239, 68, 68, 0.6)'; // Red
+            
+            // Accumulate lines for batch drawing
+            if (parentId && state.nodeCoords.has(parentId) && state.nodeCoords.has(nodeId)) {
+                if (!batchLines[color]) batchLines[color] = [];
+                const [lat1, lon1] = state.nodeCoords.get(parentId);
+                const [lat2, lon2] = state.nodeCoords.get(nodeId);
+                batchLines[color].push([lat1, lon1, lat2, lon2]);
             }
+        }
+        
+        // Draw batches
+        for (const [color, lines] of Object.entries(batchLines)) {
+            canvasOverlay.drawLines(lines, color, 2);
         }
         
         currentIndex = end;
