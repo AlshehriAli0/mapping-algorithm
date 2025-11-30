@@ -518,14 +518,9 @@ function showResults() {
         return `
         <tr>
             <td class="algo-name">${r.name}</td>
-            <td class="num">${r.path ? `${r.travelTime.toFixed(1)} min` : '-'}</td>
             <td class="num">${r.nodesExplored.toLocaleString()}</td>
             <td class="num">${r.execTimeMs.toFixed(2)}</td>
             <td class="num memory-cell">${memDisplay}</td>
-            <td class="num">${r.path ? r.pathLength : '-'}</td>
-            <td class="${r.path ? 'status-found' : 'status-notfound'}">
-                ${r.path ? '✔ Found' : '✘ No Path'}
-            </td>
         </tr>
     `}).join('');
     
@@ -575,13 +570,6 @@ function renderAnalysis() {
     const fastest = successful.reduce((a, b) => a.execTimeMs < b.execTimeMs ? a : b);
     const leastNodes = successful.reduce((a, b) => a.nodesExplored < b.nodesExplored ? a : b);
     
-    // Calculate throughput (nodes per ms) for each algorithm
-    const throughputs = successful.map(r => ({
-        ...r,
-        throughput: r.execTimeMs > 0 ? r.nodesExplored / r.execTimeMs : 0
-    }));
-    const highestThroughput = throughputs.reduce((a, b) => a.throughput > b.throughput ? a : b);
-    
     let html = `
         <div class="stat-card speed">
             <div class="icon-wrapper">⚡</div>
@@ -597,14 +585,6 @@ function renderAnalysis() {
                 <div class="stat-label">Most Efficient</div>
                 <div class="stat-value">${leastNodes.name}</div>
                 <div class="stat-sub">${leastNodes.nodesExplored.toLocaleString()} nodes explored</div>
-            </div>
-        </div>
-        <div class="stat-card throughput">
-            <div class="icon-wrapper">🚀</div>
-            <div class="stat-content">
-                <div class="stat-label">Search Throughput</div>
-                <div class="stat-value">${highestThroughput.name}</div>
-                <div class="stat-sub">${highestThroughput.throughput.toFixed(1)} nodes/ms</div>
             </div>
         </div>
     `;
@@ -744,17 +724,30 @@ function renderRouteComparison() {
 
 // Render maps links
 function renderMapsLinks() {
-    elements.mapsGrid.innerHTML = state.results.map(r => `
-        <div class="map-card">
-            <div class="algo-name">${r.name}</div>
-            <div class="travel-time">${r.path ? `${r.travelTime.toFixed(1)} min` : 'No path'}</div>
-            ${r.gmapsUrl ? `
-                <a href="${r.gmapsUrl}" target="_blank" rel="noopener noreferrer">
+    const successful = state.results.filter(r => r.path);
+    
+    if (successful.length === 0) {
+        elements.mapsGrid.innerHTML = '<p style="text-align:center; color: var(--text-muted);">No path found to display.</p>';
+        return;
+    }
+    
+    // Use first successful result since all algorithms find the same optimal path
+    const result = successful[0];
+    
+    elements.mapsGrid.innerHTML = `
+        <div class="map-card single-card">
+            <div class="card-header">
+                <span class="algo-name">Optimal Route</span>
+                <span class="travel-time">${result.travelTime.toFixed(1)} min</span>
+            </div>
+            <p class="card-note">All three algorithms (Dijkstra, A*, Bidirectional) find the same optimal shortest path with identical travel time.</p>
+            ${result.gmapsUrl ? `
+                <a href="${result.gmapsUrl}" target="_blank" rel="noopener noreferrer" class="maps-btn">
                     🗺️ Open in Google Maps
                 </a>
-            ` : '<span style="color: var(--error);">No path found</span>'}
+            ` : ''}
         </div>
-    `).join('');
+    `;
 }
 
 // Render map embed using Leaflet

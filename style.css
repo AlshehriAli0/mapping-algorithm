@@ -62,8 +62,8 @@ body {
     pointer-events: none;
     background-color: var(--bg-main);
     background-image: 
-        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
     background-size: 40px 40px;
 }
 
@@ -934,6 +934,56 @@ iframe {
     border-radius: var(--radius-md);
     border: 1px solid var(--border-glass);
     flex: 1;
+}
+
+.map-card.single-card {
+    max-width: 500px;
+    padding: 1.25rem 1.5rem;
+}
+
+.map-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.map-card .card-header .algo-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-main);
+}
+
+.map-card .card-header .travel-time {
+    font-family: var(--font-mono);
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.map-card .card-note {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.map-card .maps-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1rem;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-sm);
+    color: var(--primary);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.map-card .maps-btn:hover {
+    background: rgba(16, 185, 129, 0.2);
+    text-decoration: none;
 }
 
 .map-card a {
