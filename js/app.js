@@ -558,52 +558,48 @@ function calculatePathDistanceKm(path) {
     return dist;
 }
 
-// Render analysis
-function renderAnalysis() {
-    const successful = state.results.filter(r => r.path);
-    
-    if (successful.length === 0) {
-        elements.analysisPanel.innerHTML = '<p style="text-align:center; color: var(--text-muted);">No paths found between the selected locations.</p>';
-        return;
-    }
+// Generate all possible statistics
+function generateAllStats(successful) {
+    const stats = [];
+    const graphSize = state.graph.size;
+    const numEdges = Array.from(state.graph.values()).reduce((sum, arr) => sum + arr.length, 0);
     
     const fastest = successful.reduce((a, b) => a.execTimeMs < b.execTimeMs ? a : b);
+    const slowest = successful.reduce((a, b) => a.execTimeMs > b.execTimeMs ? a : b);
     const leastNodes = successful.reduce((a, b) => a.nodesExplored < b.nodesExplored ? a : b);
+    const mostNodes = successful.reduce((a, b) => a.nodesExplored > b.nodesExplored ? a : b);
+    const lowestMemory = successful.reduce((a, b) => a.estimatedMemoryKB < b.estimatedMemoryKB ? a : b);
+    const highestMemory = successful.reduce((a, b) => a.estimatedMemoryKB > b.estimatedMemoryKB ? a : b);
     
-    let html = `
-        <div class="stat-card speed">
-            <div class="icon-wrapper">⚡</div>
-            <div class="stat-content">
-                <div class="stat-label">Fastest Execution</div>
-                <div class="stat-value">${fastest.name}</div>
-                <div class="stat-sub">${fastest.execTimeMs.toFixed(2)} ms</div>
-            </div>
-        </div>
-        <div class="stat-card efficiency">
-            <div class="icon-wrapper">🎯</div>
-            <div class="stat-content">
-                <div class="stat-label">Most Efficient</div>
-                <div class="stat-value">${leastNodes.name}</div>
-                <div class="stat-sub">${leastNodes.nodesExplored.toLocaleString()} nodes explored</div>
-            </div>
-        </div>
-    `;
+    // 1. Fastest Execution
+    stats.push({
+        class: 'speed',
+        icon: '⚡',
+        label: 'Fastest Execution',
+        value: fastest.name,
+        sub: `${fastest.execTimeMs.toFixed(2)} ms`
+    });
     
-    // New Stats
-    const graphSize = state.graph.size;
+    // 2. Most Efficient (least nodes explored)
+    stats.push({
+        class: 'efficiency',
+        icon: '🎯',
+        label: 'Most Efficient',
+        value: leastNodes.name,
+        sub: `${leastNodes.nodesExplored.toLocaleString()} nodes explored`
+    });
+    
+    // 3. Search Coverage
     const exploredRatio = (leastNodes.nodesExplored / graphSize) * 100;
+    stats.push({
+        class: 'coverage',
+        icon: '🌐',
+        label: 'Search Coverage',
+        value: `${exploredRatio.toFixed(2)}%`,
+        sub: 'Of total graph visited'
+    });
     
-    html += `
-        <div class="stat-card coverage">
-            <div class="icon-wrapper">🌐</div>
-            <div class="stat-content">
-                <div class="stat-label">Search Coverage</div>
-                <div class="stat-value">${exploredRatio.toFixed(2)}%</div>
-                <div class="stat-sub">Of total graph visited</div>
-            </div>
-        </div>
-    `;
-
+    // 4. Path Directness (if we have start/dest)
     if (state.startPlace && state.destPlace) {
         const start = state.startPlace.nearestNode;
         const end = state.destPlace.nearestNode;
@@ -612,45 +608,52 @@ function renderAnalysis() {
         
         const straightLineDist = haversine(lat1, lon1, lat2, lon2);
         const pathDist = calculatePathDistanceKm(leastNodes.path);
-        
         const efficiency = pathDist > 0 ? (straightLineDist / pathDist) * 100 : 0;
         
-        html += `
-            <div class="stat-card directness">
-                <div class="icon-wrapper">📏</div>
-                <div class="stat-content">
-                    <div class="stat-label">Path Directness</div>
-                    <div class="stat-value">${efficiency.toFixed(1)}%</div>
-                    <div class="stat-sub">Straight line vs Actual</div>
-                </div>
-            </div>
-        `;
+        stats.push({
+            class: 'directness',
+            icon: '📏',
+            label: 'Path Directness',
+            value: `${efficiency.toFixed(1)}%`,
+            sub: 'Straight line vs Actual'
+        });
+        
+        // 5. Total Distance
+        stats.push({
+            class: 'distance',
+            icon: '🛤️',
+            label: 'Route Distance',
+            value: `${pathDist.toFixed(2)} km`,
+            sub: 'Total path length'
+        });
+        
+        // 6. Straight Line Distance
+        stats.push({
+            class: 'crow',
+            icon: '✈️',
+            label: 'As The Crow Flies',
+            value: `${straightLineDist.toFixed(2)} km`,
+            sub: 'Direct distance'
+        });
     }
     
-    // Memory efficiency stat
-    const lowestMemory = successful.reduce((a, b) => a.estimatedMemoryKB < b.estimatedMemoryKB ? a : b);
+    // 7. Lowest Memory
     let memDisplay = lowestMemory.estimatedMemoryKB >= 1024 
         ? `${(lowestMemory.estimatedMemoryKB / 1024).toFixed(2)} MB` 
         : `${lowestMemory.estimatedMemoryKB.toFixed(1)} KB`;
+    stats.push({
+        class: 'memory',
+        icon: '💾',
+        label: 'Lowest Memory',
+        value: lowestMemory.name,
+        sub: `~${memDisplay} estimated`
+    });
     
-    html += `
-        <div class="stat-card memory">
-            <div class="icon-wrapper">💾</div>
-            <div class="stat-content">
-                <div class="stat-label">Lowest Memory</div>
-                <div class="stat-value">${lowestMemory.name}</div>
-                <div class="stat-sub">~${memDisplay} estimated</div>
-            </div>
-        </div>
-    `;
-
-    // Calculate efficiency vs Dijkstra
+    // 8. Optimization Gain vs Dijkstra
     const dijkstraResult = successful.find(r => r.name === 'Dijkstra');
     if (dijkstraResult) {
-        // Find the best improvement over Dijkstra (excluding Dijkstra itself)
         let bestReduction = 0;
         let bestAlgo = null;
-
         for (const r of successful) {
             if (r.name !== 'Dijkstra' && dijkstraResult.nodesExplored > 0) {
                 const reduction = (1 - r.nodesExplored / dijkstraResult.nodesExplored) * 100;
@@ -660,20 +663,135 @@ function renderAnalysis() {
                 }
             }
         }
-
         if (bestAlgo && bestReduction > 0) {
-            html += `
-                <div class="stat-card comparison">
-                    <div class="icon-wrapper">📊</div>
-                    <div class="stat-content">
-                        <div class="stat-label">Optimization Gain</div>
-                        <div class="stat-value">${bestReduction.toFixed(1)}% <span style="font-size: 0.8em; color: var(--text-muted);">Better</span></div>
-                        <div class="stat-sub">${bestAlgo.name} vs Dijkstra</div>
-                    </div>
-                </div>
-            `;
+            stats.push({
+                class: 'comparison',
+                icon: '📊',
+                label: 'Optimization Gain',
+                value: `${bestReduction.toFixed(1)}%`,
+                sub: `${bestAlgo.name} vs Dijkstra`
+            });
         }
     }
+    
+    // 9. Speed Factor (fastest vs slowest)
+    if (slowest.execTimeMs > 0) {
+        const speedFactor = slowest.execTimeMs / fastest.execTimeMs;
+        stats.push({
+            class: 'speedup',
+            icon: '🚀',
+            label: 'Speed Factor',
+            value: `${speedFactor.toFixed(1)}x`,
+            sub: `${fastest.name} vs ${slowest.name}`
+        });
+    }
+    
+    // 10. Route Nodes
+    const pathLength = leastNodes.pathLength || leastNodes.path?.length || 0;
+    stats.push({
+        class: 'nodes',
+        icon: '📍',
+        label: 'Route Nodes',
+        value: pathLength.toLocaleString(),
+        sub: 'Intersections in path'
+    });
+    
+    // 11. Travel Time
+    const travelTime = leastNodes.travelTime || 0;
+    stats.push({
+        class: 'time',
+        icon: '⏱️',
+        label: 'Travel Time',
+        value: `${travelTime.toFixed(1)} min`,
+        sub: 'Estimated duration'
+    });
+    
+    // 12. Graph Density
+    const density = graphSize > 0 ? (numEdges / graphSize).toFixed(2) : 0;
+    stats.push({
+        class: 'density',
+        icon: '🕸️',
+        label: 'Graph Density',
+        value: `${density}`,
+        sub: 'Avg edges per node'
+    });
+    
+    // 13. Exploration Efficiency (path length vs nodes explored)
+    if (pathLength > 0) {
+        const exploreRatio = leastNodes.nodesExplored / pathLength;
+        stats.push({
+            class: 'explore',
+            icon: '🔍',
+            label: 'Exploration Ratio',
+            value: `${exploreRatio.toFixed(1)}x`,
+            sub: 'Nodes explored per path node'
+        });
+    }
+    
+    // 14. Time per Node Explored
+    const timePerNode = fastest.nodesExplored > 0 
+        ? (fastest.execTimeMs / fastest.nodesExplored * 1000).toFixed(3)
+        : 0;
+    stats.push({
+        class: 'nodeTime',
+        icon: '⚙️',
+        label: 'Processing Speed',
+        value: `${timePerNode} μs`,
+        sub: 'Per node explored'
+    });
+    
+    // 15. Memory per Node
+    const memPerNode = highestMemory.nodesExplored > 0 
+        ? (highestMemory.estimatedMemoryKB * 1024 / highestMemory.nodesExplored).toFixed(1)
+        : 0;
+    stats.push({
+        class: 'memNode',
+        icon: '📦',
+        label: 'Memory per Node',
+        value: `${memPerNode} B`,
+        sub: `${highestMemory.name} usage`
+    });
+    
+    return stats;
+}
+
+// Shuffle array using Fisher-Yates algorithm
+function shuffleArray(array) {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+}
+
+// Render analysis
+function renderAnalysis() {
+    const successful = state.results.filter(r => r.path);
+    
+    if (successful.length === 0) {
+        elements.analysisPanel.innerHTML = '<p style="text-align:center; color: var(--text-muted);">No paths found between the selected locations.</p>';
+        return;
+    }
+    
+    // Generate all 15 stats
+    const allStats = generateAllStats(successful);
+    
+    // Shuffle and pick 6 random stats
+    const shuffledStats = shuffleArray(allStats);
+    const selectedStats = shuffledStats.slice(0, 6);
+    
+    // Render the 6 selected stats
+    const html = selectedStats.map(stat => `
+        <div class="stat-card ${stat.class}">
+            <div class="icon-wrapper">${stat.icon}</div>
+            <div class="stat-content">
+                <div class="stat-label">${stat.label}</div>
+                <div class="stat-value">${stat.value}</div>
+                <div class="stat-sub">${stat.sub}</div>
+            </div>
+        </div>
+    `).join('');
     
     elements.analysisPanel.innerHTML = html;
 }
