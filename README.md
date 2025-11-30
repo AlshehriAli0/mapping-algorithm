@@ -1,8 +1,8 @@
-# Route Planner
+# PathFinder — Route Planner
 
-A route planning application that finds the shortest path between locations using **Dijkstra's algorithm** on real-world road network data from **OpenStreetMap (OSM)**.
+A web-based route planning application that finds the shortest path between locations using multiple graph algorithms on real-world road network data from **OpenStreetMap (OSM)**.
 
-Built as a project for the Algorithms course to demonstrate practical applications of graph algorithms, priority queues, and parallel processing.
+Built as a project for the Algorithms course to demonstrate practical applications of graph algorithms, priority queues, and heuristic search.
 
 ---
 
@@ -12,12 +12,13 @@ Built as a project for the Algorithms course to demonstrate practical applicatio
 - [How It Works](#how-it-works)
 - [Algorithms Used](#algorithms-used)
   - [Dijkstra's Algorithm](#dijkstras-algorithm)
+  - [A* (A-Star) Algorithm](#a-a-star-algorithm)
+  - [Bidirectional Dijkstra](#bidirectional-dijkstra)
   - [Priority Queue (Binary Heap)](#priority-queue-binary-heap)
 - [Data Source: OpenStreetMap](#data-source-openstreetmap)
   - [What is OSM?](#what-is-osm)
   - [Fetching Data via Overpass API](#fetching-data-via-overpass-api)
   - [Data Cleaning and Graph Construction](#data-cleaning-and-graph-construction)
-- [Multithreading](#multithreading)
 - [Project Structure](#project-structure)
 - [How to Run](#how-to-run)
 
@@ -25,14 +26,16 @@ Built as a project for the Algorithms course to demonstrate practical applicatio
 
 ## Project Overview
 
-This application allows users to:
+This web application allows users to:
 
 1. Select a geographic region (preset cities or custom bounding box)
 2. Choose a starting location and destination from real points of interest
-3. Compute the optimal route using Dijkstra's algorithm
-4. View estimated travel time and open the route in Google Maps
+3. Compute optimal routes using **three different algorithms**
+4. **Compare algorithm performance** (execution time, nodes explored)
+5. Visualize routes on an **interactive map**
+6. Open routes in Google Maps
 
-The project demonstrates how theoretical graph algorithms translate to real-world applications like GPS navigation systems.
+The project demonstrates how theoretical graph algorithms translate to real-world applications like GPS navigation systems, and allows side-by-side comparison of different algorithmic approaches.
 
 ---
 
@@ -43,23 +46,24 @@ The project demonstrates how theoretical graph algorithms translate to real-worl
 │  User selects   │────▶│  Fetch OSM data  │────▶│  Parse & clean  │
 │     region      │     │  via Overpass    │     │     raw data    │
 └─────────────────┘     └──────────────────┘     └────────┬────────┘
-                                                          │
-                                                          ▼
+                                                         │
+                                                         ▼
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Output route   │◀────│ Run Dijkstra's   │◀────│  Build weighted │
-│  + Google Maps  │     │    algorithm     │     │      graph      │
+│  Display map &  │◀────│ Run 3 algorithms │◀────│  Build weighted │
+│   comparison    │     │   + compare      │     │      graph      │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
 ```
 
 ### Step-by-Step Process
 
-1. **Region Selection**: User picks a city/area to navigate within
+1. **Region Selection**: User picks a city/area via presets, city search, or manual coordinates
 2. **Data Fetching**: Query the Overpass API for road network and points of interest
 3. **Data Cleaning**: Filter relevant roads, extract coordinates, calculate edge weights
 4. **Graph Construction**: Build an adjacency list representation of the road network
-5. **Place Mapping**: Map points of interest to nearest road nodes (parallelized)
-6. **Route Computation**: Apply Dijkstra's algorithm to find shortest path
-7. **Output**: Display travel time and generate Google Maps URL
+5. **Place Mapping**: Map points of interest to nearest road nodes
+6. **Route Computation**: Run Dijkstra, A*, and Bidirectional Dijkstra algorithms
+7. **Analysis**: Compare algorithm performance metrics
+8. **Visualization**: Display routes on interactive Leaflet map with Google Maps links
 
 ---
 
@@ -81,41 +85,73 @@ Dijkstra's algorithm finds the shortest path from a source node to all other nod
 - V = number of vertices (road intersections)
 - E = number of edges (road segments)
 
-**Why Dijkstra?**
-- All edge weights (travel times) are positive
-- We need the optimal path, not just any path
-- Efficient for sparse graphs like road networks
+**Implementation** (`js/routing.js`):
 
-**Implementation** (`routing.py`):
+```javascript
+export function dijkstra(graph, start, target, nodeCoords = null) {
+    const dist = new Map([[start, 0]]);
+    const parent = new Map([[start, null]]);
+    const pq = new MinHeap();
+    pq.push([0, start]);
 
-```python
-def dijkstra(graph, start, target):
-    dist = {start: 0.0}
-    parent = {start: None}
-    pq = [(0.0, start)]  # Priority queue: (distance, node)
+    while (pq.size() > 0) {
+        const [curT, u] = pq.pop();
+        if (u === target) break;
+        if (curT > (dist.get(u) ?? Infinity)) continue;
 
-    while pq:
-        cur_t, u = heapq.heappop(pq)  # Get minimum distance node
-        if u == target:
-            break
-        if cur_t > dist.get(u, float("inf")):
-            continue  # Skip outdated entries
-        for v, w in graph[u]:
-            nt = cur_t + w
-            if nt < dist.get(v, float("inf")):
-                dist[v] = nt
-                parent[v] = u
-                heapq.heappush(pq, (nt, v))
-    
-    # Reconstruct path by following parent pointers
-    ...
+        for (const [v, w] of graph.get(u) || []) {
+            const nt = curT + w;
+            if (nt < (dist.get(v) ?? Infinity)) {
+                dist.set(v, nt);
+                parent.set(v, u);
+                pq.push([nt, v]);
+            }
+        }
+    }
+    // Reconstruct path...
+}
 ```
+
+### A* (A-Star) Algorithm
+
+A* is an informed search algorithm that uses a **heuristic** to guide the search toward the goal, potentially exploring fewer nodes than Dijkstra.
+
+**How it works:**
+
+1. Like Dijkstra, but prioritizes by `f(n) = g(n) + h(n)`
+   - `g(n)` = actual cost from start to node n
+   - `h(n)` = estimated cost from n to goal (heuristic)
+2. We use **straight-line distance** (Haversine) as the heuristic
+3. The heuristic must be *admissible* (never overestimate) to guarantee optimal paths
+
+**Why A* can be faster:**
+- The heuristic focuses exploration toward the destination
+- In road networks, straight-line distance is a good estimate
+- Can explore significantly fewer nodes than blind Dijkstra search
+
+**Time Complexity:** O((V + E) log V)* — same worst-case, but typically faster in practice
+
+### Bidirectional Dijkstra
+
+Bidirectional search runs two simultaneous searches: one forward from the start, one backward from the goal, meeting in the middle.
+
+**How it works:**
+
+1. Maintain two priority queues and two distance maps
+2. Alternate expanding nodes from each direction
+3. When searches meet, we've found a candidate path
+4. Continue until we can prove no better path exists
+
+**Why it's efficient:**
+- Search space grows as πr² from each end
+- Two smaller searches (radius r/2 each) explore less area than one large search (radius r)
+- Theoretically explores ~half the nodes of standard Dijkstra
+
+**Time Complexity:** O((V + E) log V) — same worst-case, but explores fewer nodes on average
 
 ### Priority Queue (Binary Heap)
 
-A **priority queue** is an abstract data type where each element has a priority, and elements are served in order of priority (not insertion order).
-
-**Implementation:** We use Python's `heapq` module, which implements a **binary min-heap**.
+A **priority queue** is essential for efficient shortest-path algorithms. We implement a **binary min-heap** in JavaScript.
 
 **Binary Heap Properties:**
 - Complete binary tree stored in an array
@@ -125,16 +161,14 @@ A **priority queue** is an abstract data type where each element has a priority,
 **Operations:**
 | Operation | Time Complexity |
 |-----------|-----------------|
-| Insert (heappush) | O(log n) |
-| Extract Min (heappop) | O(log n) |
+| Insert (push) | O(log n) |
+| Extract Min (pop) | O(log n) |
 | Peek Min | O(1) |
 
-**Why use a priority queue in Dijkstra?**
+**Why use a priority queue?**
 - We need to repeatedly find the unvisited node with minimum distance
 - Without priority queue: O(V) per extraction → O(V²) total
 - With priority queue: O(log V) per extraction → O((V+E) log V) total
-
-This is a significant improvement for large road networks with thousands of nodes.
 
 ---
 
@@ -188,13 +222,13 @@ We exclude: footpaths, cycleways, construction zones, private roads.
 #### 3. Edge Weight Calculation
 For each road segment, we calculate travel time (not just distance):
 
-```python
-time_minutes = distance_km / (speed_kmh / 60)
+```javascript
+timeMinutes = distanceKm / (speedKmh / 60);
 ```
 
 Where:
 - **Distance**: Calculated using the Haversine formula (accounts for Earth's curvature)
-- **Speed**: Realistic average speed based on road type (already accounts for traffic, lights, and typical delays)
+- **Speed**: Realistic average speed based on road type
 
 #### 4. One-Way Road Handling
 OSM tags indicate road directionality:
@@ -210,68 +244,17 @@ We extract points of interest from popular categories:
 - **Tourism**: attractions, museums
 
 #### 6. Graph Representation
-The final graph is stored as an **adjacency list**:
+The final graph is stored as an **adjacency list** using JavaScript Maps:
 
-```python
-graph = {
-    "node_123": [("node_456", 2.5), ("node_789", 1.8)],  # (neighbor, travel_time)
-    "node_456": [("node_123", 2.5), ("node_999", 3.2)],
-    ...
-}
+```javascript
+const graph = new Map([
+    ["node_123", [["node_456", 2.5], ["node_789", 1.8]]],  // (neighbor, travel_time)
+    ["node_456", [["node_123", 2.5], ["node_999", 3.2]]],
+    // ...
+]);
 ```
 
 This representation is memory-efficient for sparse graphs (road networks typically have low average degree).
-
----
-
-## Multithreading
-
-### What is Multithreading?
-
-**Multithreading** (or multiprocessing) allows a program to execute multiple tasks concurrently by utilizing multiple CPU cores. Instead of processing items one-by-one, we can process many simultaneously.
-
-### Why We Need It
-
-After building the road graph, we need to map each point of interest (restaurant, hospital, etc.) to its nearest road node. This involves:
-
-- For each of N places
-- Compare against M road nodes
-- Calculate distance using Haversine formula
-
-This is O(N × M) distance calculations. For a city like Riyadh with ~5,000 places and ~50,000 road nodes, that's **250 million calculations**!
-
-### Our Implementation
-
-We use Python's `multiprocessing.Pool` to parallelize the place mapping:
-
-```python
-from multiprocessing import Pool, cpu_count
-
-def map_places_to_nearest_nodes(places_raw, graph_nodes, node_coords):
-    num_workers = min(cpu_count(), num_places, 8)  # Use available CPU cores
-    
-    with Pool(processes=num_workers, initializer=_init_worker, ...) as pool:
-        # Distribute places across workers
-        for result in pool.imap(_find_nearest_node, places_raw, chunksize=...):
-            mapped.append(result)
-```
-
-**How it works:**
-
-1. **Worker Initialization**: Each worker process receives a copy of the graph nodes and coordinates
-2. **Task Distribution**: Places are divided into chunks and distributed to workers
-3. **Parallel Execution**: Each worker independently finds nearest nodes for its places
-4. **Result Collection**: Results are gathered as they complete
-
-**Performance:**
-
-| CPU Cores | Speedup |
-|-----------|---------|
-| 1 (sequential) | 1x |
-| 4 | ~3.5x |
-| 8 | ~6-7x |
-
-The speedup isn't perfectly linear due to overhead from process creation and inter-process communication.
 
 ---
 
@@ -279,26 +262,39 @@ The speedup isn't perfectly linear due to overhead from process creation and int
 
 ```
 algo-project/
-├── main.py       # Entry point - orchestrates the workflow
-├── config.py     # Configuration constants (speeds, presets, categories)
-├── geo.py        # Geographic utilities (Haversine distance formula)
-├── api.py        # External API interactions (Overpass, Nominatim)
-├── graph.py      # Graph construction and place mapping
-├── routing.py    # Dijkstra's algorithm and URL generation
-├── ui.py         # Interactive user interface
-├── requirements.txt
-└── venv/         # Virtual environment
+├── index.html          # Main HTML page
+├── style.css           # Styles and theming
+├── js/
+│   ├── app.js          # Main application logic & UI
+│   ├── api.js          # Overpass & Nominatim API calls
+│   ├── config.js       # Preset regions, speeds, categories
+│   ├── geo.js          # Haversine distance formula
+│   ├── graph.js        # Graph construction & place mapping
+│   ├── routing.js      # Dijkstra, A*, Bidirectional algorithms
+│   └── utils.js        # MinHeap priority queue implementation
+├── cli/                # Legacy Python CLI version
+│   ├── main.py
+│   ├── config.py
+│   ├── geo.py
+│   ├── api.py
+│   ├── graph.py
+│   ├── routing.py
+│   ├── ui.py
+│   └── requirements.txt
+└── README.md
 ```
 
 | Module | Purpose |
 |--------|---------|
-| `config.py` | All tunable parameters in one place |
-| `geo.py` | Haversine formula for geographic distance |
-| `api.py` | HTTP requests to OSM services |
-| `graph.py` | Parse OSM data, build adjacency list, parallel place mapping |
-| `routing.py` | Dijkstra implementation, Google Maps URL builder |
-| `ui.py` | Terminal-based interactive menus |
-| `main.py` | High-level workflow orchestration |
+| `index.html` | Application structure and UI layout |
+| `style.css` | Modern styling with CSS variables |
+| `app.js` | Main controller, event handling, state management |
+| `api.js` | HTTP requests to OSM services |
+| `config.js` | All tunable parameters in one place |
+| `geo.js` | Haversine formula for geographic distance |
+| `graph.js` | Parse OSM data, build adjacency list |
+| `routing.js` | Algorithm implementations + Google Maps URL builder |
+| `utils.js` | MinHeap data structure |
 
 ---
 
@@ -306,86 +302,64 @@ algo-project/
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- Internet connection (for fetching OSM data)
+- A modern web browser (Chrome, Firefox, Safari, Edge)
+- Internet connection (for fetching OSM data and map tiles)
 
-### Installation
+### Running Locally
 
 1. **Clone or download the project**
 
-2. **Create and activate virtual environment**
+2. **Serve the files with any HTTP server:**
    ```bash
+   # Using Python
    cd algo-project
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python3 -m http.server 8000
+   
+   # Using Node.js (npx)
+   npx serve .
+   
+   # Using PHP
+   php -S localhost:8000
    ```
 
-3. **Install dependencies**
-   ```bash
-   pip install requests rich getch
+3. **Open in browser:**
+   ```
+   http://localhost:8000
    ```
 
-### Running the Application
-
-```bash
-python main.py
-```
+   > **Note:** Opening `index.html` directly (via `file://`) won't work due to ES module restrictions. You need an HTTP server.
 
 ### Usage
 
 1. **Select region source:**
-   - Press `1` for preset regions (Al Khobar, Dammam, Riyadh, etc.)
-   - Press `2` to search by city name
-   - Press `3` to enter custom bounding box coordinates
+   - Click a **preset region** (Al Khobar, Dammam, Riyadh, etc.)
+   - **Search** for any city by name
+   - Enter **custom bounding box** coordinates
 
 2. **Wait for data to load** (may take 10-30 seconds depending on region size)
 
 3. **Select START location:**
-   - Press `1` to browse by category (restaurants, hospitals, etc.)
-   - Press `2` to search by name
+   - Browse by category (restaurants, hospitals, etc.)
+   - Or search by name
 
 4. **Select DESTINATION location** (same process)
 
-5. **View results:**
-   - Estimated travel time in minutes
-   - Clickable link to open route in Google Maps
+5. **Click "Run Algorithms"** to compute routes
 
-### Example Session
+6. **View results:**
+   - Algorithm complexity comparison table
+   - Performance metrics (execution time, nodes explored)
+   - Analysis of which algorithm performed best
+   - Interactive map showing the route
+   - Links to open each route in Google Maps
 
-```
-🚗 Real-World Route Planner (Dijkstra + OSM + Overpass)
+### Example Output
 
-Choose region source:
-1) Preset regions
-2) Search city name (auto bounding box)
-3) Enter bounding box manually
-Press 1, 2 or 3: 1
+After running the algorithms, you'll see:
 
-Preset Regions:
-┌─────┬──────────────────────────┐
-│ Key │ Name                     │
-├─────┼──────────────────────────┤
-│ 1   │ Al Khobar (Full City)    │
-│ 2   │ Dammam (Full City)       │
-│ ... │ ...                      │
-└─────┴──────────────────────────┘
-Press 1-9 to select: 1
-
-Querying Overpass API... this may take a few seconds
-✔ Nodes: 45,231, edges: 98,456, named places: 1,247
-
-Select START location
-Choose selection mode:
-1) Browse by category
-2) Search by name
-Press 1 or 2: 2
-Enter keyword to search: starbucks
-...
-
-Computing shortest path from Starbucks Corniche to King Fahd Hospital...
-✔ Estimated travel time: 12.3 minutes
-
-📍 Click here to open route in Google Maps
-```
-
+- **Complexity Table**: Theoretical time/space complexity for each algorithm
+- **Performance Table**: Actual execution time, nodes explored, path length
+- **Analysis Cards**: Which algorithm was fastest, most efficient, optimization gains
+- **Route Map**: Interactive Leaflet map with the computed path
+- **Google Maps Links**: Open any algorithm's route externally
 
