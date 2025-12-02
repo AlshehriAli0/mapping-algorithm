@@ -34,27 +34,27 @@ export const ALGORITHMS = [
 ];
 
 /**
- * Dijkstra's algorithm for shortest path
- * @param {Map} graph - Adjacency list graph
- * @param {string} start - Start node ID
- * @param {string} target - Target node ID
- * @param {Map} nodeCoords - Node coordinates (not used, kept for consistent interface)
- * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array, estimatedMemoryKB: number }}
+ * Dijkstra's algorithm - explores equally in all directions like water spreading
  */
 export function dijkstra(graph, start, target, nodeCoords = null) {
+    // dist: shortest known distance to each node
+    // parent: tracks the path (who did we come from?)
     const dist = new Map([[start, 0]]);
     const parent = new Map([[start, null]]);
+    
+    // Priority queue: always process the closest node first
     const pq = new MinHeap();
-    pq.push([0, start]);
+    pq.push([0, start]); // [distance, nodeId]
+    
     let nodesExplored = 0;
     const visitedOrder = [];
-
     let maxPqSize = 1;
 
     while (pq.size() > 0) {
+        // Get the unvisited node with smallest distance
         const [curT, u] = pq.pop();
 
-        // Skip stale entries
+        // Skip if we already found a better path to this node
         if (curT > (dist.get(u) ?? Infinity)) {
             continue;
         }
@@ -62,13 +62,17 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
         nodesExplored++;
         visitedOrder.push({ id: u, parent: parent.get(u) });
 
+        // Found the target! Stop searching
         if (u === target) {
             break;
         }
 
+        // Check all neighbors and update their distances
         const neighbors = graph.get(u) || [];
-        for (const [v, w] of neighbors) {
-            const nt = curT + w;
+        for (const [v, w] of neighbors) { // v = neighbor, w = edge weight
+            const nt = curT + w; // new potential distance
+            
+            // Found a shorter path to neighbor? Update it
             if (nt < (dist.get(v) ?? Infinity)) {
                 dist.set(v, nt);
                 parent.set(v, u);
@@ -78,24 +82,20 @@ export function dijkstra(graph, start, target, nodeCoords = null) {
         }
     }
 
-    // Estimate memory: ~100 bytes per Map entry (key + value + overhead), ~50 bytes per PQ entry
     const estimatedMemoryKB = ((dist.size * 100) + (parent.size * 100) + (maxPqSize * 50)) / 1024;
 
+    // No path found
     if (!dist.has(target)) {
         return { path: null, travelTime: null, nodesExplored, visitedOrder, estimatedMemoryKB };
     }
 
+    // Walk backwards through parents to build the path
     const path = reconstructPath(parent, target);
     return { path, travelTime: dist.get(target), nodesExplored, visitedOrder, estimatedMemoryKB };
 }
 
 /**
- * A* algorithm with haversine heuristic
- * @param {Map} graph - Adjacency list graph
- * @param {string} start - Start node ID
- * @param {string} target - Target node ID
- * @param {Map} nodeCoords - Node coordinates map
- * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array, estimatedMemoryKB: number }}
+ * A* algorithm - like Dijkstra but guided toward the target using a heuristic
  */
 export function astar(graph, start, target, nodeCoords) {
     if (!nodeCoords.has(target) || !nodeCoords.has(start)) {
@@ -104,28 +104,34 @@ export function astar(graph, start, target, nodeCoords) {
 
     const [targetLat, targetLon] = nodeCoords.get(target);
     
-    // Heuristic: estimate time using straight-line distance at 60 km/h
+    // Heuristic: "how far do I think I am from the target?"
+    // Uses straight-line distance, converted to travel time at 60 km/h
     const heuristic = (node) => {
         if (!nodeCoords.has(node)) return 0;
         const [lat, lon] = nodeCoords.get(node);
         const distKm = haversine(lat, lon, targetLat, targetLon);
-        return distKm / (60 / 60.0); // Convert to minutes (assuming edge weights are minutes)
+        return distKm / (60 / 60.0); // km to minutes
     };
 
+    // gScore: actual cost from start to this node
+    // fScore: gScore + heuristic (total estimated cost to target)
     const gScore = new Map([[start, 0]]);
     const fScore = new Map([[start, heuristic(start)]]);
     const parent = new Map([[start, null]]);
+    
+    // Priority queue sorted by fScore (lower = more promising)
     const pq = new MinHeap();
-    // [fScore, gScore, node]
-    pq.push([fScore.get(start), 0, start]);
+    pq.push([fScore.get(start), 0, start]); // [fScore, gScore, nodeId]
+    
     let nodesExplored = 0;
     const visitedOrder = [];
     let maxPqSize = 1;
 
     while (pq.size() > 0) {
+        // Get node with lowest f-score (most promising)
         const [_, curG, u] = pq.pop();
 
-        // Skip stale entries (this PQ entry uses an outdated gScore)
+        // Skip outdated entries
         if (curG > (gScore.get(u) ?? Infinity)) {
             continue;
         }
@@ -133,16 +139,20 @@ export function astar(graph, start, target, nodeCoords) {
         nodesExplored++;
         visitedOrder.push({ id: u, parent: parent.get(u) });
 
+        // Found target!
         if (u === target) {
             break;
         }
 
+        // Explore neighbors
         const neighbors = graph.get(u) || [];
         for (const [v, w] of neighbors) {
-            const tentativeG = gScore.get(u) + w;
+            const tentativeG = gScore.get(u) + w; // actual cost to neighbor
+            
+            // Found better path to neighbor?
             if (tentativeG < (gScore.get(v) ?? Infinity)) {
                 gScore.set(v, tentativeG);
-                const f = tentativeG + heuristic(v);
+                const f = tentativeG + heuristic(v); // actual + estimated remaining
                 fScore.set(v, f);
                 parent.set(v, u);
                 pq.push([f, tentativeG, v]);
@@ -151,7 +161,6 @@ export function astar(graph, start, target, nodeCoords) {
         }
     }
 
-    // Estimate memory: gScore + fScore + parent maps + PQ
     const estimatedMemoryKB = ((gScore.size * 100) + (fScore.size * 100) + (parent.size * 100) + (maxPqSize * 70)) / 1024;
 
     if (!gScore.has(target)) {
@@ -163,15 +172,11 @@ export function astar(graph, start, target, nodeCoords) {
 }
 
 /**
- * Bidirectional Dijkstra's algorithm
- * @param {Map} graph - Adjacency list graph
- * @param {string} start - Start node ID
- * @param {string} target - Target node ID
- * @param {Map} nodeCoords - Node coordinates (not used)
- * @returns {{ path: Array | null, travelTime: number | null, nodesExplored: number, visitedOrder: Array, estimatedMemoryKB: number }}
+ * Bidirectional Dijkstra - searches from BOTH ends and meets in the middle
  */
 export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
-    // Build reverse graph
+    // Build reverse graph (flip all edges: A→B becomes B→A)
+    // Needed so backward search can follow edges "backwards"
     const reverseGraph = new Map();
     let reverseGraphEdges = 0;
     for (const [u, neighbors] of graph) {
@@ -184,51 +189,52 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
         }
     }
 
-    // Forward search from start
+    // === FORWARD SEARCH (from start) ===
     const distF = new Map([[start, 0]]);
     const parentF = new Map([[start, null]]);
     const pqF = new MinHeap();
     pqF.push([0, start]);
 
-    // Backward search from target
+    // === BACKWARD SEARCH (from target) ===
     const distB = new Map([[target, 0]]);
     const parentB = new Map([[target, null]]);
     const pqB = new MinHeap();
     pqB.push([0, target]);
 
-    let bestPathCost = Infinity;
-    let meetingNode = null;
+    let bestPathCost = Infinity;  // best complete path found so far
+    let meetingNode = null;       // where the two searches met
     let nodesExplored = 0;
     const visitedOrder = [];
     let maxPqFSize = 1;
     let maxPqBSize = 1;
 
-    const settledF = new Set();
-    const settledB = new Set();
+    const settledF = new Set();   // nodes fully processed by forward search
+    const settledB = new Set();   // nodes fully processed by backward search
 
+    // Alternate between forward and backward expansion
     while (pqF.size() > 0 || pqB.size() > 0) {
-        // Expand forward
+        
+        // --- Expand one node forward ---
         if (pqF.size() > 0) {
             const [curT, u] = pqF.pop();
 
-            // Skip stale entries
             if (curT > (distF.get(u) ?? Infinity)) {
-                // Do not count or record visited for stale entries
-                // and do not add to settled
+                // Stale entry, skip
             } else {
                 nodesExplored++;
                 visitedOrder.push({ id: u, side: 'start', parent: parentF.get(u) });
                 settledF.add(u);
 
-                // Check if we found a better path through this node
+                // Check: did backward search already reach this node?
                 if (distB.has(u)) {
                     const pathCost = distF.get(u) + distB.get(u);
                     if (pathCost < bestPathCost) {
                         bestPathCost = pathCost;
-                        meetingNode = u;
+                        meetingNode = u; // searches met here!
                     }
                 }
 
+                // Expand neighbors (forward direction)
                 const neighbors = graph.get(u) || [];
                 for (const [v, w] of neighbors) {
                     const nt = curT + w;
@@ -242,19 +248,18 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
             }
         }
 
-        // Expand backward
+        // --- Expand one node backward ---
         if (pqB.size() > 0) {
             const [curT, u] = pqB.pop();
 
-            // Skip stale entries
             if (curT > (distB.get(u) ?? Infinity)) {
-                // Same as forward: ignore stale entries completely
+                // Stale entry, skip
             } else {
                 nodesExplored++;
                 visitedOrder.push({ id: u, side: 'end', parent: parentB.get(u) });
                 settledB.add(u);
 
-                // Check if we found a better path through this node
+                // Check: did forward search already reach this node?
                 if (distF.has(u)) {
                     const pathCost = distF.get(u) + distB.get(u);
                     if (pathCost < bestPathCost) {
@@ -263,6 +268,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
                     }
                 }
 
+                // Expand neighbors (using REVERSE graph)
                 const neighbors = reverseGraph.get(u) || [];
                 for (const [v, w] of neighbors) {
                     const nt = curT + w;
@@ -276,7 +282,8 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
             }
         }
 
-        // Termination: if min in both queues exceeds best found path
+        // Stop when we can't find a better path
+        // (both queues' minimums add up to more than best found)
         const minF = pqF.size() > 0 ? pqF.heap[0][0] : Infinity;
         const minB = pqB.size() > 0 ? pqB.heap[0][0] : Infinity;
         if (minF + minB >= bestPathCost) {
@@ -284,8 +291,7 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
         }
     }
 
-    // Estimate memory: reverse graph + 2x (dist + parent + settled) + 2x PQ
-    // Reverse graph: ~50 bytes per edge stored
+    // Memory estimate
     const reverseGraphMem = reverseGraphEdges * 50;
     const forwardMem = (distF.size * 100) + (parentF.size * 100) + (settledF.size * 50) + (maxPqFSize * 50);
     const backwardMem = (distB.size * 100) + (parentB.size * 100) + (settledB.size * 50) + (maxPqBSize * 50);
@@ -295,31 +301,30 @@ export function bidirectionalDijkstra(graph, start, target, nodeCoords = null) {
         return { path: null, travelTime: null, nodesExplored, visitedOrder, estimatedMemoryKB };
     }
 
-    // Reconstruct path: start -> meetingNode -> target
-    const pathToMeeting = reconstructPath(parentF, meetingNode);
-    const pathFromMeeting = reconstructPath(parentB, meetingNode);
+    // Build final path: start → meeting → target
+    const pathToMeeting = reconstructPath(parentF, meetingNode);   // start to meeting
+    const pathFromMeeting = reconstructPath(parentB, meetingNode); // meeting to target (reversed)
     pathFromMeeting.reverse();
 
-    // Combine paths (meeting node appears in both, so skip duplicate)
+    // Combine (skip duplicate meeting node)
     const fullPath = pathToMeeting.concat(pathFromMeeting.slice(1));
 
     return { path: fullPath, travelTime: bestPathCost, nodesExplored, visitedOrder, estimatedMemoryKB };
 }
 
 /**
- * Reconstruct path from parent pointers
- * @param {Map} parent - Parent map
- * @param {string} target - Target node
- * @returns {Array} Path from start to target
+ * Reconstruct path by walking backwards through parent pointers
+ * Example: if parent = {C→B, B→A, A→null}, and target=C
+ *          we get: C → B → A, then reverse to: A → B → C
  */
 function reconstructPath(parent, target) {
     const path = [];
     let cur = target;
     while (cur !== null) {
         path.push(cur);
-        cur = parent.get(cur);
+        cur = parent.get(cur); // go to previous node
     }
-    path.reverse();
+    path.reverse(); // flip from [target→start] to [start→target]
     return path;
 }
 
