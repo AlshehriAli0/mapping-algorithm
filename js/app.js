@@ -6,7 +6,7 @@ import { parseOverpassToGraph, buildGraph, mapPlacesToNearestNodes, groupPlacesB
 import { ALGORITHMS, runAlgorithm } from './routing.js';
 import { haversine } from './geo.js';
 
-// Application state
+
 const state = {
     bbox: null,
     nodeCoords: null,
@@ -19,7 +19,7 @@ const state = {
     currentResultIndex: 0
 };
 
-// DOM Elements
+
 const elements = {
     // Tabs
     regionTabs: document.querySelectorAll('.tab-btn'),
@@ -106,7 +106,7 @@ function renderPresetRegions() {
     }
 }
 
-// Setup event listeners
+// TEst
 function setupEventListeners() {
     // Tab switching
     elements.regionTabs.forEach(tab => {
